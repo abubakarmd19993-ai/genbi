@@ -1,8 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from backend.app.database import db
+from backend.app.routes import router
 
 app = FastAPI(title="GenBI")
+
+app.include_router(router)
 
 class Message(BaseModel):
     text: str

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from passlib.context import CryptContext
-from jose import jwt
+from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from backend.app.database import db
 
@@ -17,10 +18,6 @@ TOKEN_EXPIRE_MINUTES = 60
 
 # Request models
 class UserSignup(BaseModel):
-    username: str
-    password: str
-
-class UserLogin(BaseModel):
     username: str
     password: str
 
@@ -42,16 +39,27 @@ async def signup(user: UserSignup):
     existing = await db.users.find_one({"username": user.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
-    
     hashed = hash_password(user.password)
     await db.users.insert_one({"username": user.username, "password": hashed})
     return {"message": "User created successfully"}
 
 @router.post("/login")
-async def login(user: UserLogin):
-    db_user = await db.users.find_one({"username": user.username})
-    if not db_user or not verify_password(user.password, db_user["password"]):
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    db_user = await db.users.find_one({"username": form_data.username})
+    if not db_user or not verify_password(form_data.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    token = create_token({"sub": user.username})
+    token = create_token({"sub": form_data.username})
     return {"access_token": token, "token_type": "bearer"}
+
+# Token verification
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return username
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")

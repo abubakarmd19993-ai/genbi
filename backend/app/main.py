@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from backend.app.database import db
 from backend.app.routes import router
+from backend.app.auth import router as auth_router
 
 app = FastAPI(title="GenBI")
 
 app.include_router(router)
+app.include_router(auth_router)
 
 class Message(BaseModel):
     text: str

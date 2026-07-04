@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from backend.app.database import db
 from backend.app.auth import get_current_user
 from backend.app.rag import ingest_file, query_file
+from backend.app.forecast import run_forecast
 import pandas as pd
 import io
 
@@ -32,7 +33,6 @@ async def upload_file(
     result = await db.files.insert_one(file_meta)
     file_id = str(result.inserted_id)
 
-    # Ingest into RAG pipeline
     chunks = await ingest_file(contents, file.filename, file_id)
 
     return {
@@ -64,4 +64,31 @@ async def query(request: QueryRequest, current_user: str = Depends(get_current_u
         "answer": result["answer"],
         "context": result["context"],
         "asked_by": current_user
+    }
+
+class ForecastRequest(BaseModel):
+    periods: int = 30
+
+@router.post("/forecast")
+async def forecast(
+    file: UploadFile = File(...),
+    date_col: str = "date",
+    value_col: str = "sales",
+    periods: int = 30,
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+
+    contents = await file.read()
+
+    try:
+        result = await run_forecast(contents, file.filename, date_col, value_col, periods)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "message": "Forecast completed successfully",
+        "uploaded_by": current_user,
+        **result
     }

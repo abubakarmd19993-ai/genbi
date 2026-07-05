@@ -5,16 +5,20 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from backend.app.database import db
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 router = APIRouter(prefix="/auth")
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False)
 
-# JWT config
-SECRET_KEY = "genbi-secret-key-change-in-production"
-ALGORITHM = "HS256"
-TOKEN_EXPIRE_MINUTES = 60
+# JWT config from environment variables
+SECRET_KEY = os.getenv("SECRET_KEY", "genbi-secret-key-change-in-production")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", 60))
 
 # Request models
 class UserSignup(BaseModel):

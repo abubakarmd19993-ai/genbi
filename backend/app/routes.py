@@ -59,6 +59,15 @@ class QueryRequest(BaseModel):
 @router.post("/query")
 async def query(request: QueryRequest, current_user: str = Depends(get_current_user)):
     result = await query_file(request.question, request.file_id)
+
+    # Save query history to MongoDB
+    await db.query_history.insert_one({
+        "question": request.question,
+        "answer": result["answer"],
+        "file_id": request.file_id,
+        "asked_by": current_user
+    })
+
     return {
         "question": request.question,
         "answer": result["answer"],
@@ -66,8 +75,12 @@ async def query(request: QueryRequest, current_user: str = Depends(get_current_u
         "asked_by": current_user
     }
 
-class ForecastRequest(BaseModel):
-    periods: int = 30
+@router.get("/query-history")
+async def get_query_history(current_user: str = Depends(get_current_user)):
+    history = await db.query_history.find({"asked_by": current_user}).to_list(100)
+    for h in history:
+        h["_id"] = str(h["_id"])
+    return history
 
 @router.post("/forecast")
 async def forecast(
@@ -87,8 +100,25 @@ async def forecast(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Save forecast history to MongoDB
+    await db.forecast_history.insert_one({
+        "filename": file.filename,
+        "date_column": date_col,
+        "value_column": value_col,
+        "periods_forecasted": periods,
+        "forecast": result["forecast"],
+        "forecasted_by": current_user
+    })
+
     return {
         "message": "Forecast completed successfully",
         "uploaded_by": current_user,
         **result
     }
+
+@router.get("/forecast-history")
+async def get_forecast_history(current_user: str = Depends(get_current_user)):
+    history = await db.forecast_history.find({"forecasted_by": current_user}).to_list(100)
+    for h in history:
+        h["_id"] = str(h["_id"])
+    return history

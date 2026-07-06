@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -22,3 +23,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+=======
+venv/
+__pycache__/
+*.pyc
+.env
+.vscode/
+chroma_db/
+*.bin
+.env
+>>>>>>> cf2aa7c0b3ebecfbb44a193b86f08192f178e3a9

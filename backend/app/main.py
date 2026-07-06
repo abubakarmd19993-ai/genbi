@@ -1,10 +1,20 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.app.database import db
 from backend.app.routes import router
 from backend.app.auth import router as auth_router
 
 app = FastAPI(title="GenBI")
+
+# CORS — must be added BEFORE routes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(router)
 app.include_router(auth_router)

@@ -5,6 +5,7 @@ from backend.app.auth import get_current_user
 from backend.app.rag import ingest_file, query_file
 from backend.app.forecast import run_forecast
 from backend.app.summary import generate_summary
+from backend.app.insights import generate_insights
 import pandas as pd
 import io
 
@@ -35,8 +36,6 @@ async def upload_file(
     file_id = str(result.inserted_id)
 
     chunks = await ingest_file(contents, file.filename, file_id)
-
-    # Auto generate summary
     summary = generate_summary(contents, file.filename)
 
     return {
@@ -66,6 +65,27 @@ async def summarize_file(
         raise HTTPException(status_code=400, detail=str(e))
 
     return summary
+
+@router.post("/insights")
+async def get_insights(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+
+    contents = await file.read()
+
+    try:
+        insights = generate_insights(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "message": "Insights generated successfully",
+        "generated_by": current_user,
+        **insights
+    }
 
 @router.get("/files")
 async def get_files(current_user: str = Depends(get_current_user)):

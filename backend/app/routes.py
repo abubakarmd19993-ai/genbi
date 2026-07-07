@@ -4,6 +4,7 @@ from backend.app.database import db
 from backend.app.auth import get_current_user
 from backend.app.rag import ingest_file, query_file
 from backend.app.forecast import run_forecast
+from backend.app.summary import generate_summary
 import pandas as pd
 import io
 
@@ -35,6 +36,9 @@ async def upload_file(
 
     chunks = await ingest_file(contents, file.filename, file_id)
 
+    # Auto generate summary
+    summary = generate_summary(contents, file.filename)
+
     return {
         "message": "File uploaded and indexed successfully",
         "filename": file.filename,
@@ -42,8 +46,26 @@ async def upload_file(
         "columns": list(df.columns),
         "file_id": file_id,
         "uploaded_by": current_user,
-        "chunks_indexed": chunks
+        "chunks_indexed": chunks,
+        "summary": summary
     }
+
+@router.post("/summarize")
+async def summarize_file(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+
+    contents = await file.read()
+
+    try:
+        summary = generate_summary(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return summary
 
 @router.get("/files")
 async def get_files(current_user: str = Depends(get_current_user)):
@@ -60,7 +82,6 @@ class QueryRequest(BaseModel):
 async def query(request: QueryRequest, current_user: str = Depends(get_current_user)):
     result = await query_file(request.question, request.file_id)
 
-    # Save query history to MongoDB
     await db.query_history.insert_one({
         "question": request.question,
         "answer": result["answer"],
@@ -100,7 +121,6 @@ async def forecast(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Save forecast history to MongoDB
     await db.forecast_history.insert_one({
         "filename": file.filename,
         "date_column": date_col,

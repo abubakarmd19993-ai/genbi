@@ -10,7 +10,6 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
   const [input, setInput] = useState("");
   const [fileId, setFileId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState(null);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -67,45 +66,37 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
     setLoading(false);
   };
 
-  // Show Upload Tool
   if (activeTool === "upload") {
     return <UploadTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   }
 
-  // Show Forecast Tool
   if (activeTool === "forecast") {
     return <ForecastTool headers={headers} />;
   }
 
-  // Show Files Tool
   if (activeTool === "files") {
     return <FilesTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   }
 
-  // Show History Tool
   if (activeTool === "history") {
     return <HistoryTool headers={headers} />;
   }
 
-  // Main Chat View
   return (
     <div className="flex-1 flex flex-col">
       {messages.length === 0 ? (
-        // Welcome Screen
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <h1 className="text-4xl font-bold text-white mb-2">
             Hello, {username}! 👋
           </h1>
           <p className="text-gray-400 text-xl mb-8">How can I help you today?</p>
 
-          {/* File ID Input */}
           {fileId && (
             <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2 text-green-400 text-sm">
               ✅ File loaded: {fileId.slice(0, 20)}...
             </div>
           )}
 
-          {/* Quick Actions */}
           <div className="flex gap-2 mb-8 flex-wrap justify-center">
             {quickActions.map((action, i) => (
               <button
@@ -119,7 +110,6 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
             ))}
           </div>
 
-          {/* Popular Actions */}
           <div className="grid grid-cols-3 gap-3 w-full max-w-2xl">
             {popularActions.map((action, i) => (
               <button
@@ -137,7 +127,6 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
           </div>
         </div>
       ) : (
-        // Chat Messages
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -174,9 +163,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
         </div>
       )}
 
-      {/* Input Area */}
       <div className="p-4 border-t border-[#30363d]">
-        {/* File ID input */}
         <div className="mb-2">
           <input
             type="text"
@@ -186,7 +173,6 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
             className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-2 text-gray-400 text-xs focus:outline-none focus:border-[#f78166]/50 transition-all"
           />
         </div>
-        {/* Message input */}
         <div className="flex items-center gap-3 bg-[#161b22] border border-[#30363d] rounded-2xl px-4 py-3 focus-within:border-[#f78166]/50 transition-all">
           <button
             onClick={() => setActiveTool("upload")}
@@ -222,6 +208,8 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [insights, setInsights] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -239,10 +227,30 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
     setLoading(false);
   };
 
+  const handleInsights = async () => {
+    if (!file) return;
+    setInsightsLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/insights`, formData, { headers });
+      setInsights(res.data);
+    } catch (e) {
+      console.error("Insights failed:", e);
+    }
+    setInsightsLoading(false);
+  };
+
   return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
+    <div className="flex-1 p-8 max-w-2xl mx-auto w-full overflow-y-auto">
       <h2 className="text-2xl font-bold text-white mb-2">📁 Upload File</h2>
-      <p className="text-gray-400 mb-6">Upload your CSV or Excel file to start analyzing</p>
+      <p className="text-gray-400 mb-4">Upload your CSV or Excel file to start analyzing</p>
+
+      {/* Privacy Badge */}
+      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2 mb-6">
+        <span>🔒</span>
+        <p className="text-green-400 text-xs">Your data is encrypted and private — we never share or sell your files</p>
+      </div>
 
       <div className="border-2 border-dashed border-[#30363d] hover:border-[#f78166]/50 rounded-2xl p-8 text-center transition-all mb-4">
         <div className="text-5xl mb-4">📂</div>
@@ -274,24 +282,95 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       </button>
 
       {result && (
-        <div className="mt-6 bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-          <p className="text-green-400 font-medium mb-4">✅ File uploaded successfully!</p>
-          <div className="space-y-2 text-sm">
-            <p className="text-gray-400">📄 <span className="text-white">{result.filename}</span></p>
-            <p className="text-gray-400">📊 Rows: <span className="text-white">{result.rows}</span></p>
-            <p className="text-gray-400">🗂️ Columns: <span className="text-white">{result.columns?.join(", ")}</span></p>
-            <p className="text-gray-400">🧩 Chunks: <span className="text-white">{result.chunks_indexed}</span></p>
-            <div className="bg-[#0d0d0d] rounded-xl p-3 mt-3">
-              <p className="text-gray-500 text-xs mb-1">File ID (copy this):</p>
-              <p className="text-[#f78166] font-mono text-xs break-all">{result.file_id}</p>
+        <div className="mt-6 space-y-4">
+          {/* File Info */}
+          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
+            <p className="text-green-400 font-medium mb-4">✅ File uploaded successfully!</p>
+            <div className="space-y-2 text-sm">
+              <p className="text-gray-400">📄 <span className="text-white">{result.filename}</span></p>
+              <p className="text-gray-400">📊 Rows: <span className="text-white">{result.rows}</span></p>
+              <p className="text-gray-400">🗂️ Columns: <span className="text-white">{result.columns?.join(", ")}</span></p>
+              <p className="text-gray-400">🧩 Chunks: <span className="text-white">{result.chunks_indexed}</span></p>
+              <div className="bg-[#0d0d0d] rounded-xl p-3 mt-3">
+                <p className="text-gray-500 text-xs mb-1">File ID (copy this):</p>
+                <p className="text-[#f78166] font-mono text-xs break-all">{result.file_id}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setActiveTool("chat")}
+                className="flex-1 bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
+              >
+                Start Chatting →
+              </button>
+              <button
+                onClick={handleInsights}
+                disabled={insightsLoading}
+                className="flex-1 bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
+              >
+                {insightsLoading ? "Analyzing..." : "🔮 Get Insights"}
+              </button>
             </div>
           </div>
-          <button
-            onClick={() => setActiveTool("chat")}
-            className="w-full mt-4 bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
-          >
-            Start Chatting →
-          </button>
+
+          {/* Auto Summary */}
+          {result.summary && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-white font-semibold">🔮 AI Data Summary</p>
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                  result.summary.quality_score === 100
+                    ? "bg-green-500/20 text-green-400"
+                    : result.summary.quality_score > 80
+                    ? "bg-yellow-500/20 text-yellow-400"
+                    : "bg-red-500/20 text-red-400"
+                }`}>
+                  Quality: {result.summary.quality_score}%
+                </span>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {result.summary.insights?.map((insight, i) => (
+                  <p key={i} className="text-gray-300 text-sm bg-[#0d0d0d] rounded-xl px-3 py-2">
+                    {insight}
+                  </p>
+                ))}
+              </div>
+
+              <p className="text-gray-500 text-xs mb-3">Column Analysis:</p>
+              <div className="space-y-2">
+                {Object.entries(result.summary.column_info || {}).map(([col, info]) => (
+                  <div key={col} className="bg-[#0d0d0d] rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-white text-xs font-medium">{col}</p>
+                      <span className="text-gray-500 text-xs">{info.type}</span>
+                    </div>
+                    {info.min !== undefined ? (
+                      <p className="text-gray-400 text-xs">
+                        Min: <span className="text-[#f78166]">{info.min}</span> •
+                        Max: <span className="text-[#f78166]">{info.max}</span> •
+                        Avg: <span className="text-[#f78166]">{info.mean}</span>
+                      </p>
+                    ) : (
+                      <p className="text-gray-400 text-xs">
+                        Top: {Object.keys(info.top_values || {}).join(", ")}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Executive Insights */}
+          {insights && (
+            <div className="bg-[#161b22] border border-[#bc8cff]/30 rounded-2xl p-6">
+              <p className="text-[#bc8cff] font-semibold mb-4">🔮 Executive Business Insights</p>
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                {insights.executive_summary}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

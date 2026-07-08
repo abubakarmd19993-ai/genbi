@@ -6,6 +6,7 @@ from backend.app.rag import ingest_file, query_file
 from backend.app.forecast import run_forecast
 from backend.app.summary import generate_summary
 from backend.app.insights import generate_insights
+from backend.app.recommendations import generate_recommendations
 import pandas as pd
 import io
 
@@ -85,6 +86,27 @@ async def get_insights(
         "message": "Insights generated successfully",
         "generated_by": current_user,
         **insights
+    }
+
+@router.post("/recommendations")
+async def get_recommendations(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+
+    contents = await file.read()
+
+    try:
+        result = generate_recommendations(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "message": "Recommendations generated successfully",
+        "generated_by": current_user,
+        **result
     }
 
 @router.get("/files")

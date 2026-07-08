@@ -10,8 +10,7 @@ export default function Home() {
   const [activeChat, setActiveChat] = useState(null);
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex text-white">
-      {/* Left Sidebar */}
+    <div className="min-h-screen bg-[#0a0f1e] flex text-white">
       <LeftSidebar
         chats={chats}
         activeChat={activeChat}
@@ -19,8 +18,6 @@ export default function Home() {
         activeTool={activeTool}
         setActiveTool={setActiveTool}
       />
-
-      {/* Center — Chat Area */}
       <ChatArea
         activeTool={activeTool}
         setActiveTool={setActiveTool}
@@ -28,8 +25,6 @@ export default function Home() {
         setChats={setChats}
         setActiveChat={setActiveChat}
       />
-
-      {/* Right Sidebar */}
       <RightSidebar setActiveTool={setActiveTool} />
     </div>
   );

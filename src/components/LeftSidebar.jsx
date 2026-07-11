@@ -6,10 +6,17 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
   const { username, logout } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [isDark, setIsDark] = useState(true);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const toggleTheme = () => {
+    setIsDark(!isDark);
+    document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
+    localStorage.setItem("theme", isDark ? "light" : "dark");
   };
 
   const navItems = [
@@ -22,16 +29,12 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
   ];
 
   return (
-    <div
-      className={`min-h-screen bg-[#161b22] border-r border-[#30363d] flex flex-col transition-all duration-300 relative ${
-        collapsed ? "w-[70px]" : "w-[220px]"
-      }`}
-    >
-      {/* Collapse/Expand Toggle Button */}
+    <div className={`min-h-screen bg-[#161b22] border-r border-[#30363d] flex flex-col transition-all duration-300 relative ${collapsed ? "w-[70px]" : "w-[220px]"}`}>
+      
+      {/* Collapse Toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-6 w-6 h-6 bg-[#161b22] border border-[#30363d] rounded-full flex items-center justify-center text-gray-400 hover:text-[#f78166] hover:border-[#f78166]/50 transition-all z-10 text-xs"
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className="absolute -right-3 top-6 w-6 h-6 bg-[#161b22] border border-[#30363d] rounded-full flex items-center justify-center text-gray-400 hover:text-[#f78166] transition-all z-10 text-xs"
       >
         {collapsed ? "▶" : "◀"}
       </button>
@@ -47,11 +50,9 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
             </div>
           )}
         </div>
-        {/* New Chat Button */}
         <button
           onClick={() => setActiveTool("chat")}
           className="w-full bg-[#f78166] hover:bg-[#e06b52] text-white text-sm font-medium py-2 rounded-xl transition-all flex items-center justify-center gap-2"
-          title="New Chat"
         >
           <span>+</span> {!collapsed && "New Chat"}
         </button>
@@ -93,14 +94,15 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
           </div>
         )}
 
-        {/* Navigation */}
         {!collapsed && <p className="text-gray-600 text-xs mb-2 px-1">Tools</p>}
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTool(item.id)}
             title={item.label}
-            className={`w-full ${collapsed ? "justify-center" : "text-left"} px-3 py-2.5 rounded-xl text-sm mb-1 transition-all flex items-center gap-3 ${
+            className={`w-full px-3 py-2.5 rounded-xl text-sm mb-1 transition-all flex items-center gap-3 ${
+              collapsed ? "justify-center" : "text-left"
+            } ${
               activeTool === item.id
                 ? "bg-[#f78166]/20 text-[#f78166] border border-[#f78166]/30"
                 : "text-gray-400 hover:bg-[#0d0d0d] hover:text-white"
@@ -112,10 +114,10 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
         ))}
       </div>
 
-      {/* User Profile */}
+      {/* User Profile + Theme Toggle */}
       <div className="p-3 border-t border-[#30363d]">
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
-          <div className={`flex items-center gap-2 ${collapsed ? "flex-col" : ""}`}>
+          <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-[#f78166] flex items-center justify-center text-white font-bold text-sm shrink-0">
               {username?.[0]?.toUpperCase()}
             </div>
@@ -126,13 +128,23 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
               </div>
             )}
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-gray-500 hover:text-red-400 text-xs transition-all"
-            title="Logout"
-          >
-            🚪
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="text-gray-500 hover:text-yellow-400 text-xs transition-all"
+              title="Toggle theme"
+            >
+              {isDark ? "☀️" : "🌙"}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="text-gray-500 hover:text-red-400 text-xs transition-all"
+              title="Logout"
+            >
+              🚪
+            </button>
+          </div>
         </div>
       </div>
     </div>

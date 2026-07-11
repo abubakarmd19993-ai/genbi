@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import AILoading from "./AILoading";
 import axios from "axios";
 
 const API = "http://127.0.0.1:8000";
@@ -69,15 +71,12 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
   if (activeTool === "upload") {
     return <UploadTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   }
-
   if (activeTool === "forecast") {
     return <ForecastTool headers={headers} />;
   }
-
   if (activeTool === "files") {
     return <FilesTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   }
-
   if (activeTool === "history") {
     return <HistoryTool headers={headers} />;
   }
@@ -86,9 +85,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
     <div className="flex-1 flex flex-col">
       {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
-            Hello, {username}! 👋
-          </h1>
+          <h1 className="text-4xl font-bold text-white mb-2">Hello, {username}! 👋</h1>
           <p className="text-gray-400 text-xl mb-8">How can I help you today?</p>
 
           {fileId && (
@@ -145,21 +142,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats, setActiv
               </div>
             </div>
           ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-[#161b22] border border-[#30363d] rounded-2xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span>🔮</span>
-                  <span className="text-gray-400 text-sm">GenBI is thinking...</span>
-                  <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 bg-[#f78166] rounded-full animate-bounce" style={{animationDelay: "0ms"}}></div>
-                    <div className="w-1.5 h-1.5 bg-[#f78166] rounded-full animate-bounce" style={{animationDelay: "150ms"}}></div>
-                    <div className="w-1.5 h-1.5 bg-[#f78166] rounded-full animate-bounce" style={{animationDelay: "300ms"}}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {loading && <AILoading />}
         </div>
       )}
 
@@ -210,19 +193,26 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [error, setError] = useState("");
   const [insights, setInsights] = useState(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState(null);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const { showToast } = useToast();
 
-  const handleUpload = async () => {
-    if (!file) return;
+  const handleUpload = async (fileToUpload) => {
+    const uploadFile = fileToUpload || file;
+    if (!uploadFile) return;
     setLoading(true);
     setError("");
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadFile);
     try {
       const res = await axios.post(`${API}/upload`, formData, { headers });
       setResult(res.data);
       setFileId(res.data.file_id);
+      showToast(`✅ ${res.data.filename} uploaded successfully!`, "success");
     } catch (e) {
       setError(e.response?.data?.detail || "Upload failed");
+      showToast("❌ Upload failed. Please try again.", "error");
     }
     setLoading(false);
   };
@@ -235,10 +225,40 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
     try {
       const res = await axios.post(`${API}/insights`, formData, { headers });
       setInsights(res.data);
+      showToast("🔮 Executive insights generated!", "success");
     } catch (e) {
       console.error("Insights failed:", e);
+      showToast("❌ Failed to generate insights.", "error");
     }
     setInsightsLoading(false);
+  };
+
+  const handleRecommendations = async () => {
+    if (!file) return;
+    setRecsLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/recommendations`, formData, { headers });
+      setRecommendations(res.data);
+      showToast("💡 Business recommendations ready!", "success");
+    } catch (e) {
+      console.error("Recommendations failed:", e);
+      showToast("❌ Failed to generate recommendations.", "error");
+    }
+    setRecsLoading(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && (droppedFile.name.endsWith(".csv") || droppedFile.name.endsWith(".xlsx"))) {
+      setFile(droppedFile);
+      showToast(`📎 ${droppedFile.name} selected!`, "info");
+    } else {
+      showToast("❌ Only CSV and Excel files allowed.", "error");
+    }
   };
 
   return (
@@ -246,19 +266,29 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       <h2 className="text-2xl font-bold text-white mb-2">📁 Upload File</h2>
       <p className="text-gray-400 mb-4">Upload your CSV or Excel file to start analyzing</p>
 
-      {/* Privacy Badge */}
       <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2 mb-6">
         <span>🔒</span>
         <p className="text-green-400 text-xs">Your data is encrypted and private — we never share or sell your files</p>
       </div>
 
-      <div className="border-2 border-dashed border-[#30363d] hover:border-[#f78166]/50 rounded-2xl p-8 text-center transition-all mb-4">
-        <div className="text-5xl mb-4">📂</div>
-        <p className="text-gray-400 mb-4">Drop your file here or click to browse</p>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
+          isDragging ? "border-[#f78166] bg-[#f78166]/10" : "border-[#30363d] hover:border-[#f78166]/50"
+        }`}
+      >
+        <div className="text-5xl mb-4">{isDragging ? "📂" : "📁"}</div>
+        <p className="text-gray-400 mb-2">{isDragging ? "Drop your file here!" : "Drag & drop or click to browse"}</p>
+        <p className="text-gray-600 text-xs mb-4">Supports CSV and Excel files</p>
         <input
           type="file"
           accept=".csv,.xlsx"
-          onChange={(e) => setFile(e.target.files[0])}
+          onChange={(e) => {
+            setFile(e.target.files[0]);
+            showToast(`📎 ${e.target.files[0].name} selected!`, "info");
+          }}
           className="hidden"
           id="fileInput"
         />
@@ -274,7 +304,7 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
       <button
-        onClick={handleUpload}
+        onClick={() => handleUpload()}
         disabled={!file || loading}
         className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
       >
@@ -283,7 +313,6 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
 
       {result && (
         <div className="mt-6 space-y-4">
-          {/* File Info */}
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
             <p className="text-green-400 font-medium mb-4">✅ File uploaded successfully!</p>
             <div className="space-y-2 text-sm">
@@ -310,10 +339,16 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               >
                 {insightsLoading ? "Analyzing..." : "🔮 Get Insights"}
               </button>
+              <button
+                onClick={handleRecommendations}
+                disabled={recsLoading}
+                className="flex-1 bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+              >
+                {recsLoading ? "Analyzing..." : "💡 Recommendations"}
+              </button>
             </div>
           </div>
 
-          {/* Auto Summary */}
           {result.summary && (
             <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
@@ -328,15 +363,11 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
                   Quality: {result.summary.quality_score}%
                 </span>
               </div>
-
               <div className="space-y-2 mb-4">
                 {result.summary.insights?.map((insight, i) => (
-                  <p key={i} className="text-gray-300 text-sm bg-[#0d0d0d] rounded-xl px-3 py-2">
-                    {insight}
-                  </p>
+                  <p key={i} className="text-gray-300 text-sm bg-[#0d0d0d] rounded-xl px-3 py-2">{insight}</p>
                 ))}
               </div>
-
               <p className="text-gray-500 text-xs mb-3">Column Analysis:</p>
               <div className="space-y-2">
                 {Object.entries(result.summary.column_info || {}).map(([col, info]) => (
@@ -352,9 +383,7 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
                         Avg: <span className="text-[#f78166]">{info.mean}</span>
                       </p>
                     ) : (
-                      <p className="text-gray-400 text-xs">
-                        Top: {Object.keys(info.top_values || {}).join(", ")}
-                      </p>
+                      <p className="text-gray-400 text-xs">Top: {Object.keys(info.top_values || {}).join(", ")}</p>
                     )}
                   </div>
                 ))}
@@ -362,13 +391,17 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
             </div>
           )}
 
-          {/* Executive Insights */}
           {insights && (
             <div className="bg-[#161b22] border border-[#bc8cff]/30 rounded-2xl p-6">
               <p className="text-[#bc8cff] font-semibold mb-4">🔮 Executive Business Insights</p>
-              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                {insights.executive_summary}
-              </div>
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{insights.executive_summary}</div>
+            </div>
+          )}
+
+          {recommendations && (
+            <div className="bg-[#161b22] border border-[#58a6ff]/30 rounded-2xl p-6">
+              <p className="text-[#58a6ff] font-semibold mb-4">💡 AI Business Recommendations</p>
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{recommendations.recommendations}</div>
             </div>
           )}
         </div>
@@ -386,6 +419,7 @@ function ForecastTool({ headers }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { showToast } = useToast();
 
   const handleForecast = async () => {
     if (!file) return;
@@ -399,8 +433,10 @@ function ForecastTool({ headers }) {
     try {
       const res = await axios.post(`${API}/forecast`, formData, { headers });
       setResult(res.data);
+      showToast(`📈 Forecast completed! ${res.data.periods_forecasted} periods predicted.`, "success");
     } catch (e) {
       setError(e.response?.data?.detail || "Forecast failed");
+      showToast("❌ Forecast failed. Please try again.", "error");
     }
     setLoading(false);
   };
@@ -409,7 +445,6 @@ function ForecastTool({ headers }) {
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
       <h2 className="text-2xl font-bold text-white mb-2">📈 Forecasting</h2>
       <p className="text-gray-400 mb-6">Predict future values from your time-series data</p>
-
       <div className="space-y-4 mb-6">
         <div>
           <label className="text-gray-400 text-sm mb-2 block">Upload File</label>
@@ -423,47 +458,29 @@ function ForecastTool({ headers }) {
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-gray-400 text-xs mb-1 block">Date Column</label>
-            <input
-              value={dateCol}
-              onChange={(e) => setDateCol(e.target.value)}
-              className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f78166]"
-            />
+            <input value={dateCol} onChange={(e) => setDateCol(e.target.value)}
+              className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f78166]" />
           </div>
           <div>
             <label className="text-gray-400 text-xs mb-1 block">Value Column</label>
-            <input
-              value={valueCol}
-              onChange={(e) => setValueCol(e.target.value)}
-              className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f78166]"
-            />
+            <input value={valueCol} onChange={(e) => setValueCol(e.target.value)}
+              className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f78166]" />
           </div>
           <div>
             <label className="text-gray-400 text-xs mb-1 block">Periods</label>
-            <input
-              type="number"
-              value={periods}
-              onChange={(e) => setPeriods(e.target.value)}
-              className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f78166]"
-            />
+            <input type="number" value={periods} onChange={(e) => setPeriods(e.target.value)}
+              className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f78166]" />
           </div>
         </div>
       </div>
-
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-
-      <button
-        onClick={handleForecast}
-        disabled={!file || loading}
-        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all mb-6"
-      >
+      <button onClick={handleForecast} disabled={!file || loading}
+        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all mb-6">
         {loading ? "Running Forecast..." : "Run Forecast 📈"}
       </button>
-
       {result && (
         <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-          <p className="text-green-400 font-medium mb-4">
-            ✅ Forecast completed! {result.periods_forecasted} periods predicted.
-          </p>
+          <p className="text-green-400 font-medium mb-4">✅ Forecast completed! {result.periods_forecasted} periods predicted.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -485,11 +502,6 @@ function ForecastTool({ headers }) {
                 ))}
               </tbody>
             </table>
-            {result.forecast?.length > 10 && (
-              <p className="text-gray-500 text-xs mt-2">
-                Showing 10 of {result.forecast.length} predictions
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -501,6 +513,7 @@ function ForecastTool({ headers }) {
 function FilesTool({ headers, setFileId, setActiveTool }) {
   const [files, setFiles] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const { showToast } = useToast();
 
   const loadFiles = async () => {
     try {
@@ -509,6 +522,7 @@ function FilesTool({ headers, setFileId, setActiveTool }) {
       setLoaded(true);
     } catch {
       setLoaded(true);
+      showToast("❌ Failed to load files.", "error");
     }
   };
 
@@ -518,10 +532,9 @@ function FilesTool({ headers, setFileId, setActiveTool }) {
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
       <h2 className="text-2xl font-bold text-white mb-2">🗂️ My Files</h2>
       <p className="text-gray-400 mb-6">All files you have uploaded</p>
-
       {files.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-5xl mb-4">📂</p>
+          <p className="text-5xl mb-4 animate-bounce">📂</p>
           <p className="text-gray-400">No files uploaded yet</p>
         </div>
       ) : (
@@ -531,11 +544,9 @@ function FilesTool({ headers, setFileId, setActiveTool }) {
               <div className="flex items-center justify-between mb-2">
                 <p className="text-white font-medium text-sm">📄 {f.filename}</p>
                 <button
-                  onClick={() => { setFileId(f._id); setActiveTool("chat"); }}
+                  onClick={() => { setFileId(f._id); setActiveTool("chat"); showToast(`💬 Chatting with ${f.filename}`, "info"); }}
                   className="text-[#f78166] text-xs hover:underline"
-                >
-                  Chat with this →
-                </button>
+                >Chat with this →</button>
               </div>
               <div className="flex gap-4 text-xs text-gray-500">
                 <span>📊 {f.rows} rows</span>
@@ -571,10 +582,9 @@ function HistoryTool({ headers }) {
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
       <h2 className="text-2xl font-bold text-white mb-2">📜 Query History</h2>
       <p className="text-gray-400 mb-6">Your past questions and answers</p>
-
       {history.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-5xl mb-4">📜</p>
+          <p className="text-5xl mb-4 animate-bounce">📜</p>
           <p className="text-gray-400">No queries yet</p>
         </div>
       ) : (

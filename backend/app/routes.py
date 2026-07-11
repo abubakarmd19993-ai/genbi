@@ -7,6 +7,7 @@ from backend.app.forecast import run_forecast
 from backend.app.summary import generate_summary
 from backend.app.insights import generate_insights
 from backend.app.recommendations import generate_recommendations
+from backend.app.data_cleaning import analyze_data_quality
 import pandas as pd
 import io
 
@@ -57,14 +58,11 @@ async def summarize_file(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
     contents = await file.read()
-
     try:
         summary = generate_summary(contents, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
     return summary
 
 @router.post("/insights")
@@ -74,14 +72,11 @@ async def get_insights(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
     contents = await file.read()
-
     try:
         insights = generate_insights(contents, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
     return {
         "message": "Insights generated successfully",
         "generated_by": current_user,
@@ -95,17 +90,32 @@ async def get_recommendations(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
     contents = await file.read()
-
     try:
         result = generate_recommendations(contents, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
     return {
         "message": "Recommendations generated successfully",
         "generated_by": current_user,
+        **result
+    }
+
+@router.post("/data-quality")
+async def data_quality(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+    contents = await file.read()
+    try:
+        result = analyze_data_quality(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "message": "Data quality analysis completed",
+        "analyzed_by": current_user,
         **result
     }
 
@@ -123,14 +133,12 @@ class QueryRequest(BaseModel):
 @router.post("/query")
 async def query(request: QueryRequest, current_user: str = Depends(get_current_user)):
     result = await query_file(request.question, request.file_id)
-
     await db.query_history.insert_one({
         "question": request.question,
         "answer": result["answer"],
         "file_id": request.file_id,
         "asked_by": current_user
     })
-
     return {
         "question": request.question,
         "answer": result["answer"],
@@ -155,14 +163,11 @@ async def forecast(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
     contents = await file.read()
-
     try:
         result = await run_forecast(contents, file.filename, date_col, value_col, periods)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
     await db.forecast_history.insert_one({
         "filename": file.filename,
         "date_column": date_col,
@@ -171,7 +176,6 @@ async def forecast(
         "forecast": result["forecast"],
         "forecasted_by": current_user
     })
-
     return {
         "message": "Forecast completed successfully",
         "uploaded_by": current_user,

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTool, setActiveTool }) {
+export default function LeftSidebar({ chats = [], activeChat, setActiveChat, activeTool, setActiveTool }) {
   const { username, logout } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -22,6 +22,8 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
   const navItems = [
     { id: "chat", icon: "💬", label: "All Chats" },
     { id: "upload", icon: "📁", label: "Upload File" },
+    { id: "dashboard", icon: "📊", label: "My Stats" },
+    { id: "autodashboard", icon: "📉", label: "Auto Dashboard" },
     { id: "forecast", icon: "📈", label: "Forecasting" },
     { id: "history", icon: "📜", label: "History" },
     { id: "files", icon: "🗂️", label: "My Files" },
@@ -30,7 +32,7 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
 
   return (
     <div className={`min-h-screen bg-[#161b22] border-r border-[#30363d] flex flex-col transition-all duration-300 relative ${collapsed ? "w-[70px]" : "w-[220px]"}`}>
-      
+
       {/* Collapse Toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
@@ -72,7 +74,7 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
         </div>
       )}
 
-      {/* Chat History */}
+      {/* Chat History + Nav */}
       <div className="flex-1 overflow-y-auto p-3">
         {!collapsed && chats.length > 0 && (
           <div className="mb-4">
@@ -80,7 +82,7 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
             {chats.map((chat, i) => (
               <button
                 key={i}
-                onClick={() => setActiveChat(chat)}
+                onClick={() => setActiveChat && setActiveChat(chat)}
                 className={`w-full text-left px-3 py-2 rounded-xl text-xs mb-1 transition-all ${
                   activeChat === chat
                     ? "bg-[#f78166]/20 text-[#f78166]"
@@ -129,7 +131,6 @@ export default function LeftSidebar({ chats, activeChat, setActiveChat, activeTo
             )}
           </div>
           <div className="flex items-center gap-1">
-            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="text-gray-500 hover:text-yellow-400 text-xs transition-all"

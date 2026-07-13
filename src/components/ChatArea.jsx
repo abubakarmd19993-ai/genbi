@@ -2,9 +2,15 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import AILoading from "./AILoading";
+import ChartDashboard from "./Dashboard";
 import axios from "axios";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, ResponsiveContainer, Legend
+} from "recharts";
 
 const API = "http://127.0.0.1:8000";
+const PIE_COLORS = ["#f78166", "#bc8cff", "#58a6ff", "#3fb950", "#f0883e", "#db61a2"];
 
 export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   const { username, token } = useAuth();
@@ -70,6 +76,12 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
     setLoading(false);
   };
 
+  if (activeTool === "dashboard") {
+    return <Dashboard headers={headers} />;
+  }
+  if (activeTool === "autodashboard") {
+    return <ChartDashboard headers={headers} />;
+  }
   if (activeTool === "upload") {
     return <UploadTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   }
@@ -187,6 +199,181 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   );
 }
 
+// ── Dashboard (usage stats) ───────────────────────────────
+function Dashboard({ headers }) {
+  const [stats, setStats] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const loadStats = async () => {
+    try {
+      const [filesRes, historyRes] = await Promise.all([
+        axios.get(`${API}/files`, { headers }),
+        axios.get(`${API}/query-history`, { headers }),
+      ]);
+      setStats({
+        totalFiles: filesRes.data.length,
+        totalRows: filesRes.data.reduce((sum, f) => sum + (f.rows || 0), 0),
+        totalQueries: historyRes.data.length,
+        recentFiles: filesRes.data.slice(0, 5),
+        recentQueries: historyRes.data.slice(0, 5),
+      });
+      setLoaded(true);
+    } catch {
+      setStats({ totalFiles: 0, totalRows: 0, totalQueries: 0, recentFiles: [], recentQueries: [] });
+      setLoaded(true);
+    }
+  };
+
+  if (!loaded) loadStats();
+
+  return (
+    <div className="flex-1 p-8 max-w-4xl mx-auto w-full overflow-y-auto">
+      <h2 className="text-2xl font-bold text-white mb-2">📊 Dashboard</h2>
+      <p className="text-gray-400 mb-6">Your GenBI activity at a glance</p>
+
+      {!stats ? (
+        <p className="text-gray-500 text-sm">Loading...</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5">
+              <p className="text-gray-500 text-xs mb-1">📁 Files Uploaded</p>
+              <p className="text-white text-3xl font-bold">{stats.totalFiles}</p>
+            </div>
+            <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5">
+              <p className="text-gray-500 text-xs mb-1">📊 Total Rows Analyzed</p>
+              <p className="text-white text-3xl font-bold">{stats.totalRows.toLocaleString()}</p>
+            </div>
+            <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5">
+              <p className="text-gray-500 text-xs mb-1">💬 Queries Asked</p>
+              <p className="text-white text-3xl font-bold">{stats.totalQueries}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <p className="text-white font-semibold mb-3">🗂️ Recent Files</p>
+              {stats.recentFiles.length === 0 ? (
+                <p className="text-gray-500 text-sm">No files yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {stats.recentFiles.map((f, i) => (
+                    <div key={i} className="bg-[#161b22] border border-[#30363d] rounded-xl p-3">
+                      <p className="text-white text-sm font-medium truncate">📄 {f.filename}</p>
+                      <p className="text-gray-500 text-xs mt-1">{f.rows} rows</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-white font-semibold mb-3">📜 Recent Queries</p>
+              {stats.recentQueries.length === 0 ? (
+                <p className="text-gray-500 text-sm">No queries yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {stats.recentQueries.map((h, i) => (
+                    <div key={i} className="bg-[#161b22] border border-[#30363d] rounded-xl p-3">
+                      <p className="text-[#f78166] text-sm font-medium truncate">❓ {h.question}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Auto Dashboard Generator (charts from uploaded file columns) ──
+function AutoDashboardCharts({ columnInfo }) {
+  if (!columnInfo) return null;
+
+  const numericCols = Object.entries(columnInfo).filter(([, info]) => info.min !== undefined);
+  const categoricalCols = Object.entries(columnInfo).filter(([, info]) => info.min === undefined && info.top_values);
+
+  if (numericCols.length === 0 && categoricalCols.length === 0) {
+    return <p className="text-gray-500 text-sm">Not enough column data to build charts.</p>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {numericCols.length > 0 && (
+        <div>
+          <p className="text-gray-400 text-xs font-medium mb-3">📈 Numeric Columns (Min / Avg / Max)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {numericCols.map(([col, info]) => {
+              const data = [
+                { name: "Min", value: info.min },
+                { name: "Avg", value: info.mean },
+                { name: "Max", value: info.max },
+              ];
+              return (
+                <div key={col} className="bg-[#0d0d0d] rounded-xl p-4">
+                  <p className="text-white text-xs font-medium mb-2">{col}</p>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={data}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
+                      <XAxis dataKey="name" stroke="#8b949e" fontSize={11} />
+                      <YAxis stroke="#8b949e" fontSize={11} />
+                      <Tooltip
+                        contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, fontSize: 12 }}
+                        labelStyle={{ color: "#fff" }}
+                      />
+                      <Bar dataKey="value" fill="#f78166" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {categoricalCols.length > 0 && (
+        <div>
+          <p className="text-gray-400 text-xs font-medium mb-3">🥧 Categorical Columns (Top Values)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {categoricalCols.map(([col, info]) => {
+              const data = Object.entries(info.top_values || {}).map(([name, value]) => ({ name, value }));
+              if (data.length === 0) return null;
+              return (
+                <div key={col} className="bg-[#0d0d0d] rounded-xl p-4">
+                  <p className="text-white text-xs font-medium mb-2">{col}</p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={data}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={70}
+                        label={{ fontSize: 11, fill: "#8b949e" }}
+                      >
+                        {data.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, fontSize: 12 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11, color: "#8b949e" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Upload Tool ──────────────────────────────────────────
 function UploadTool({ headers, setFileId, setActiveTool }) {
   const [file, setFile] = useState(null);
@@ -199,6 +386,7 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [recsLoading, setRecsLoading] = useState(false);
   const [dataQuality, setDataQuality] = useState(null);
   const [qualityLoading, setQualityLoading] = useState(false);
+  const [showAutoDashboard, setShowAutoDashboard] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const { showToast } = useToast();
 
@@ -341,36 +529,49 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
                 <p className="text-[#f78166] font-mono text-xs break-all">{result.file_id}</p>
               </div>
             </div>
-            <div className="flex gap-2 mt-4">
+            <div className="grid grid-cols-2 gap-2 mt-4">
               <button
                 onClick={() => setActiveTool("chat")}
-                className="flex-1 bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
+                className="bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
               >
                 Start Chatting →
               </button>
               <button
                 onClick={handleInsights}
                 disabled={insightsLoading}
-                className="flex-1 bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
+                className="bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
               >
                 {insightsLoading ? "Analyzing..." : "🔮 Get Insights"}
               </button>
               <button
                 onClick={handleRecommendations}
                 disabled={recsLoading}
-                className="flex-1 bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
               >
                 {recsLoading ? "Analyzing..." : "💡 Recommendations"}
               </button>
               <button
                 onClick={handleDataQuality}
                 disabled={qualityLoading}
-                className="flex-1 bg-[#3fb950]/20 border border-[#3fb950]/30 text-[#3fb950] py-2 rounded-xl text-sm hover:bg-[#3fb950]/30 transition-all disabled:opacity-50"
+                className="bg-[#3fb950]/20 border border-[#3fb950]/30 text-[#3fb950] py-2 rounded-xl text-sm hover:bg-[#3fb950]/30 transition-all disabled:opacity-50"
               >
                 {qualityLoading ? "Analyzing..." : "🧹 Data Quality"}
               </button>
+              <button
+                onClick={() => setShowAutoDashboard(!showAutoDashboard)}
+                className="col-span-2 bg-[#f0883e]/20 border border-[#f0883e]/30 text-[#f0883e] py-2 rounded-xl text-sm hover:bg-[#f0883e]/30 transition-all"
+              >
+                {showAutoDashboard ? "▲ Hide Auto Dashboard" : "📊 Generate Auto Dashboard"}
+              </button>
             </div>
           </div>
+
+          {showAutoDashboard && result.summary?.column_info && (
+            <div className="bg-[#161b22] border border-[#f0883e]/30 rounded-2xl p-6">
+              <p className="text-[#f0883e] font-semibold mb-4">📊 Auto Dashboard</p>
+              <AutoDashboardCharts columnInfo={result.summary.column_info} />
+            </div>
+          )}
 
           {result.summary && (
             <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">

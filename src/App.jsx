@@ -6,6 +6,8 @@ import { ConversationProvider } from "./context/ConversationContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Workspace from "./pages/Workspace";
+import Dashboard from "./pages/Dashboard";
+import "./index.css";
 
 function PrivateRoute({ children }) {
   const { token } = useAuth();
@@ -21,6 +23,14 @@ function App() {
             <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <PrivateRoute>
+                      <Dashboard />
+                    </PrivateRoute>
+                  }
+                />
                 <Route
                   path="/workspace/:id"
                   element={

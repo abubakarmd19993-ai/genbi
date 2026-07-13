@@ -51,6 +51,7 @@ export default function Home() {
   };
 
   return (
+<<<<<<< HEAD
     <div
       className={`min-h-screen bg-[var(--bg-app)] flex text-[var(--text-primary)] transition-opacity duration-200 ${
         fading ? "opacity-0" : "opacity-100"
@@ -133,6 +134,24 @@ export default function Home() {
       </div>
 
       <RightSidebar setActiveTool={goToTool} />
+=======
+    <div className="min-h-screen bg-[#0a0f1e] flex text-white">
+      <LeftSidebar
+        chats={chats}
+        activeChat={activeChat}
+        setActiveChat={setActiveChat}
+        activeTool={activeTool}
+        setActiveTool={setActiveTool}
+      />
+      <ChatArea
+        activeTool={activeTool}
+        setActiveTool={setActiveTool}
+        activeChat={activeChat}
+        setChats={setChats}
+        setActiveChat={setActiveChat}
+      />
+      <RightSidebar setActiveTool={setActiveTool} />
+>>>>>>> a33f2506190487a2b0d9eb9a9a26ad824863c3ce
     </div>
   );
 }

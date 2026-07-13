@@ -7,7 +7,6 @@ from backend.app.auth import router as auth_router
 
 app = FastAPI(title="GenBI")
 
-# CORS — must be added BEFORE routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

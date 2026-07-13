@@ -26,12 +26,18 @@ export default function LeftSidebar({ activeTool, setActiveTool }) {
   };
 
   const navItems = [
+    { id: "chat", icon: "💬", label: "All Chats" },
     { id: "upload", icon: "📁", label: "Upload File" },
+    { id: "dashboard", icon: "📊", label: "Dashboard" },
     { id: "forecast", icon: "📈", label: "Forecasting" },
     { id: "history", icon: "📜", label: "History" },
     { id: "files", icon: "🗂️", label: "My Files" },
     { id: "embed", icon: "⚙️", label: "Embedder" },
   ];
+
+  const handleNavClick = (id) => {
+    setActiveTool(id);
+  };
 
   const filteredConversations = useMemo(() => {
     const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -213,7 +219,7 @@ export default function LeftSidebar({ activeTool, setActiveTool }) {
         {navItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => setActiveTool(item.id)}
+            onClick={() => handleNavClick(item.id)}
             title={item.label}
             className={`w-full ${collapsed ? "justify-center" : "text-left"} px-3 py-2.5 rounded-xl text-sm mb-1 transition-all flex items-center gap-3 ${
               activeTool === item.id

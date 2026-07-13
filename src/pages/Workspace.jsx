@@ -1,7 +1,12 @@
+<<<<<<< HEAD
+=======
+import { useState } from "react";
+>>>>>>> a33f2506190487a2b0d9eb9a9a26ad824863c3ce
 import { useParams, useNavigate } from "react-router-dom";
 import LeftSidebar from "../components/LeftSidebar";
 import RightSidebar from "../components/RightSidebar";
 import ChatArea from "../components/ChatArea";
+<<<<<<< HEAD
 import ChatConversation from "../components/ChatConversation";
 import NotFound from "../components/NotFound";
 import { useConversations } from "../context/ConversationContext";
@@ -21,6 +26,16 @@ export default function Workspace() {
       navigate("/");
       return;
     }
+=======
+
+export default function Workspace() {
+  const { tool } = useParams();
+  const navigate = useNavigate();
+  const [chats, setChats] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+
+  const switchTool = (newTool) => {
+>>>>>>> a33f2506190487a2b0d9eb9a9a26ad824863c3ce
     navigate(`/workspace/${newTool}`, { replace: true });
   };
 
@@ -35,6 +50,7 @@ export default function Workspace() {
           ← Dashboard
         </button>
         <span className="text-[var(--text-quaternary)] text-xs">/</span>
+<<<<<<< HEAD
         <span className="text-[var(--text-primary)] text-sm capitalize truncate max-w-[300px]">
           {isTool ? id : conversation?.title || "Chat"}
         </span>
@@ -51,6 +67,26 @@ export default function Workspace() {
           <NotFound />
         )}
 
+=======
+        <span className="text-[var(--text-primary)] text-sm capitalize">{tool}</span>
+      </div>
+
+      <div className="flex flex-1">
+        <LeftSidebar
+          chats={chats}
+          activeChat={activeChat}
+          setActiveChat={setActiveChat}
+          activeTool={tool}
+          setActiveTool={switchTool}
+        />
+        <ChatArea
+          activeTool={tool}
+          setActiveTool={switchTool}
+          activeChat={activeChat}
+          setChats={setChats}
+          setActiveChat={setActiveChat}
+        />
+>>>>>>> a33f2506190487a2b0d9eb9a9a26ad824863c3ce
         <RightSidebar setActiveTool={switchTool} />
       </div>
     </div>

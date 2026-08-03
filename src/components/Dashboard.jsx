@@ -33,20 +33,20 @@ export default function Dashboard({ headers }) {
 
   return (
     <div className="flex-1 p-8 w-full overflow-y-auto">
-      <h2 className="text-2xl font-bold text-white mb-2">📊 Auto Dashboard</h2>
-      <p className="text-gray-400 mb-6">Upload your data and get an instant visual dashboard</p>
+      <h2 className="text-2xl font-bold text-[var(--text-hi)] mb-2">📊 Auto Dashboard</h2>
+      <p className="text-[var(--text-mid)] mb-6">Upload your data and get an instant visual dashboard</p>
 
       <div className="flex gap-4 mb-6">
         <input
           type="file"
           accept=".csv,.xlsx"
           onChange={(e) => setFile(e.target.files[0])}
-          className="flex-1 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-gray-400 text-sm"
+          className="flex-1 bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-xl px-4 py-3 text-[var(--text-mid)] text-sm"
         />
         <button
           onClick={handleGenerate}
           disabled={!file || loading}
-          className="bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl transition-all"
+          className="bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-[var(--text-hi)] font-semibold px-6 py-3 rounded-xl transition-all"
         >
           {loading ? "Generating..." : "📊 Generate Dashboard"}
         </button>
@@ -57,9 +57,9 @@ export default function Dashboard({ headers }) {
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {dashboard.kpis?.map((kpi, i) => (
-              <div key={i} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4">
-                <p className="text-gray-500 text-xs mb-1">{kpi.label}</p>
-                <p className="text-2xl font-bold text-white">{kpi.value}</p>
+              <div key={i} className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+                <p className="text-[var(--text-low)] text-xs mb-1">{kpi.label}</p>
+                <p className="text-2xl font-bold text-[var(--text-hi)]">{kpi.value}</p>
                 <p className="text-xs mt-1" style={{ color: COLORS[i % COLORS.length] }}>{kpi.sublabel}</p>
               </div>
             ))}
@@ -70,14 +70,14 @@ export default function Dashboard({ headers }) {
 
             {/* Bar Chart */}
             {dashboard.bar_data && (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-                <p className="text-white font-semibold mb-4">📊 {dashboard.bar_title}</p>
+              <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+                <p className="text-[var(--text-hi)] font-semibold mb-4">📊 {dashboard.bar_title}</p>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={dashboard.bar_data}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-                    <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ backgroundColor: "#161b22", border: "1px solid #30363d", borderRadius: "8px" }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" />
+                    <XAxis dataKey="name" tick={{ fill: "var(--text-mid)", fontSize: 11 }} />
+                    <YAxis tick={{ fill: "var(--text-mid)", fontSize: 11 }} />
+                    <Tooltip contentStyle={{ backgroundColor: "var(--bg-panel-solid)", border: "1px solid var(--glass-border)", borderRadius: "8px" }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {dashboard.bar_data.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -90,8 +90,8 @@ export default function Dashboard({ headers }) {
 
             {/* Pie Chart */}
             {dashboard.pie_data && (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-                <p className="text-white font-semibold mb-4">🥧 {dashboard.pie_title}</p>
+              <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+                <p className="text-[var(--text-hi)] font-semibold mb-4">🥧 {dashboard.pie_title}</p>
                 <ResponsiveContainer width="100%" height={250}>
                   <PieChart>
                     <Pie
@@ -108,8 +108,8 @@ export default function Dashboard({ headers }) {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: "#161b22", border: "1px solid #30363d", borderRadius: "8px" }} />
-                    <Legend wrapperStyle={{ color: "#9ca3af", fontSize: "12px" }} />
+                    <Tooltip contentStyle={{ backgroundColor: "var(--bg-panel-solid)", border: "1px solid var(--glass-border)", borderRadius: "8px" }} />
+                    <Legend wrapperStyle={{ color: "var(--text-mid)", fontSize: "12px" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -117,14 +117,14 @@ export default function Dashboard({ headers }) {
 
             {/* Line Chart */}
             {dashboard.line_data && (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-                <p className="text-white font-semibold mb-4">📈 {dashboard.line_title}</p>
+              <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+                <p className="text-[var(--text-hi)] font-semibold mb-4">📈 {dashboard.line_title}</p>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={dashboard.line_data}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-                    <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ backgroundColor: "#161b22", border: "1px solid #30363d", borderRadius: "8px" }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" />
+                    <XAxis dataKey="name" tick={{ fill: "var(--text-mid)", fontSize: 11 }} />
+                    <YAxis tick={{ fill: "var(--text-mid)", fontSize: 11 }} />
+                    <Tooltip contentStyle={{ backgroundColor: "var(--bg-panel-solid)", border: "1px solid var(--glass-border)", borderRadius: "8px" }} />
                     <Line type="monotone" dataKey="value" stroke="#f78166" strokeWidth={2} dot={{ fill: "#f78166" }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -133,17 +133,17 @@ export default function Dashboard({ headers }) {
 
             {/* Scatter Plot */}
             {dashboard.scatter_data && (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-                <p className="text-white font-semibold mb-4">🔵 {dashboard.scatter_title}</p>
+              <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+                <p className="text-[var(--text-hi)] font-semibold mb-4">🔵 {dashboard.scatter_title}</p>
                 <ResponsiveContainer width="100%" height={250}>
                   <ScatterChart>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-                    <XAxis dataKey="x" name="Index" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <YAxis dataKey="y" name="Value" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" />
+                    <XAxis dataKey="x" name="Index" tick={{ fill: "var(--text-mid)", fontSize: 11 }} />
+                    <YAxis dataKey="y" name="Value" tick={{ fill: "var(--text-mid)", fontSize: 11 }} />
                     <ZAxis range={[40, 40]} />
                     <Tooltip
                       cursor={{ strokeDasharray: "3 3" }}
-                      contentStyle={{ backgroundColor: "#161b22", border: "1px solid #30363d", borderRadius: "8px" }}
+                      contentStyle={{ backgroundColor: "var(--bg-panel-solid)", border: "1px solid var(--glass-border)", borderRadius: "8px" }}
                     />
                     <Scatter data={dashboard.scatter_data} fill="#bc8cff" />
                   </ScatterChart>
@@ -154,22 +154,22 @@ export default function Dashboard({ headers }) {
 
           {/* Heatmap (simple grid) */}
           {dashboard.heatmap_data && (
-            <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-              <p className="text-white font-semibold mb-4">🌡️ {dashboard.heatmap_title}</p>
+            <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+              <p className="text-[var(--text-hi)] font-semibold mb-4">🌡️ {dashboard.heatmap_title}</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr>
-                      <th className="text-gray-500 text-left py-2 pr-4">Category</th>
+                      <th className="text-[var(--text-low)] text-left py-2 pr-4">Category</th>
                       {dashboard.heatmap_cols?.map((col, i) => (
-                        <th key={i} className="text-gray-500 py-2 px-2 text-center">{col}</th>
+                        <th key={i} className="text-[var(--text-low)] py-2 px-2 text-center">{col}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {dashboard.heatmap_data?.map((row, i) => (
                       <tr key={i}>
-                        <td className="text-gray-300 py-2 pr-4 font-medium">{row.name}</td>
+                        <td className="text-[var(--text-mid)] py-2 pr-4 font-medium">{row.name}</td>
                         {row.values?.map((val, j) => {
                           const max = Math.max(...dashboard.heatmap_data.flatMap(r => r.values));
                           const intensity = max > 0 ? val / max : 0;
@@ -197,9 +197,9 @@ export default function Dashboard({ headers }) {
 
           {/* AI Insight */}
           {dashboard.ai_insight && (
-            <div className="bg-[#161b22] border border-[#bc8cff]/30 rounded-2xl p-6">
+            <div className="bg-[var(--bg-panel-solid)] border border-[#bc8cff]/30 rounded-2xl p-6">
               <p className="text-[#bc8cff] font-semibold mb-2">🔮 Dashboard Insight</p>
-              <p className="text-gray-300 text-sm leading-relaxed">{dashboard.ai_insight}</p>
+              <p className="text-[var(--text-mid)] text-sm leading-relaxed">{dashboard.ai_insight}</p>
             </div>
           )}
         </div>

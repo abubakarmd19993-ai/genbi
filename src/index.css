@@ -1,29 +1,106 @@
 @import "tailwindcss";
- body { background-color: #0a0f1e;
- }
+/* ==========================================================================
+   Theme variables (must come first — everything below depends on these)
+   ========================================================================== */
 :root {
-  --bg-app: #0d0d0d;
-  --bg-panel: #161b22;
-  --bg-panel-alt: #0d0d0d;
-  --border-color: #30363d;
-  --text-primary: #ffffff;
-  --text-secondary: #9ca3af;
-  --text-tertiary: #6b7280;
-  --text-quaternary: #4b5563;
+  --bg-void: #0a0e17;
+  --bg-panel-solid: #10151f;
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-strong: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --accent-flame: #2b7fff;
+  --accent-signal: #7c5cff;
+  --accent-data: #22e2a0;
+  --text-hi: #f4f6fb;
+  --text-mid: #9aa4b8;
+  --text-low: #5b6478;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 [data-theme="light"] {
-  --bg-app: #f4f5f7;
-  --bg-panel: #ffffff;
-  --bg-panel-alt: #f0f1f3;
-  --border-color: #e2e4e8;
-  --text-primary: #111318;
-  --text-secondary: #4b5563;
-  --text-tertiary: #6b7280;
-  --text-quaternary: #9ca3af;
+  --bg-void: #f3f4f8;
+  --bg-panel-solid: #ffffff;
+  --glass: rgba(10, 14, 23, 0.03);
+  --glass-strong: rgba(10, 14, 23, 0.05);
+  --glass-border: rgba(10, 14, 23, 0.08);
+  --text-hi: #10131c;
+  --text-mid: #565f74;
+  --text-low: #9aa4b8;
 }
 
-body {
-  background-color: var(--bg-app);
-  transition: background-color 0.2s ease;
+/* ==========================================================================
+   Base utility classes
+   ========================================================================== */
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); }
+
+.glass-panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
+
+/* ==========================================================================
+   Aurora background effect
+   ========================================================================== */
+.aurora-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora-bg::before,
+.aurora-bg::after {
+  content: "";
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.16;
+  animation: aurora-drift 18s ease-in-out infinite alternate;
+}
+.aurora-bg::before {
+  background: var(--accent-signal);
+  top: -120px;
+  left: -100px;
+}
+.aurora-bg::after {
+  background: var(--accent-flame);
+  bottom: -140px;
+  right: -80px;
+  animation-delay: 4s;
+}
+@keyframes aurora-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(40px, 30px) scale(1.15); }
+}
+
+/* ==========================================================================
+   Base body + scrollbar styling
+   ========================================================================== */
+body {
+  background: var(--bg-void);
+  font-family: var(--font-body);
+  color: var(--text-hi);
+}
+
+/* ==========================================================================
+   App root container
+   ========================================================================== */
+#root {
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-low); }

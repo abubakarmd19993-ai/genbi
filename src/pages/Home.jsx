@@ -1,31 +1,36 @@
 import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
-import LeftSidebar from "../components/LeftSidebar";
-import RightSidebar from "../components/RightSidebar";
+import { useNavigate } from "react-router-dom";
+import AppShell from "../components/AppShell";
 import ChatArea from "../components/ChatArea";
+import Dashboard from "../components/Dashboard";
 
 export default function Home() {
+  const navigate = useNavigate();
   const [activeTool, setActiveTool] = useState("chat");
   const [chats, setChats] = useState([]);
-  const [activeChat, setActiveChat] = useState(null);
+
+  const handleNavigate = (id) => {
+    setActiveTool(id);
+  };
+
+  const renderTool = () => {
+    switch (activeTool) {
+      case "dashboard":
+        return <Dashboard />;
+      default:
+        return (
+          <ChatArea
+            activeTool={activeTool}
+            setActiveTool={handleNavigate}
+            setChats={setChats}
+          />
+        );
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] flex text-white">
-      <LeftSidebar
-        chats={chats}
-        activeChat={activeChat}
-        setActiveChat={setActiveChat}
-        activeTool={activeTool}
-        setActiveTool={setActiveTool}
-      />
-      <ChatArea
-        activeTool={activeTool}
-        setActiveTool={setActiveTool}
-        activeChat={activeChat}
-        setChats={setChats}
-        setActiveChat={setActiveChat}
-      />
-      <RightSidebar setActiveTool={setActiveTool} />
-    </div>
+    <AppShell activeTool={activeTool} onNavigate={handleNavigate}>
+      {renderTool()}
+    </AppShell>
   );
 }

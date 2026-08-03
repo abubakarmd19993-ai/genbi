@@ -2,13 +2,17 @@ import pandas as pd
 import io
 from langchain_ollama import OllamaLLM
 
-llm = OllamaLLM(model="llama3.2")
+llm = OllamaLLM(model="llama3.2:1b")
+
 
 def generate_recommendations(contents: bytes, filename: str) -> dict:
     """Generate AI-powered business recommendations."""
 
     if filename.endswith(".csv"):
-        df = pd.read_csv(io.BytesIO(contents))
+        try:
+            df = pd.read_csv(io.BytesIO(contents))
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(contents), encoding="latin-1")
     else:
         df = pd.read_excel(io.BytesIO(contents))
 
@@ -34,7 +38,6 @@ def generate_recommendations(contents: bytes, filename: str) -> dict:
                 top_bottom[f"bottom_{col}_by_{num_col}"] = sorted_data.tail(3).to_dict()
 
     prompt = f"""You are an expert business consultant analyzing company data.
-
 Based on this business data, provide SPECIFIC and ACTIONABLE recommendations:
 
 File: {filename}

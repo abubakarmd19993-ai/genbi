@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi.responses import Response
 from pydantic import BaseModel
 from backend.app.database import db
 from backend.app.auth import get_current_user
@@ -9,6 +10,7 @@ from backend.app.insights import generate_insights
 from backend.app.recommendations import generate_recommendations
 from backend.app.data_cleaning import analyze_data_quality
 from backend.app.dashboard import generate_dashboard
+from backend.app.pdf_report import generate_pdf_report
 import pandas as pd
 import io
 
@@ -211,6 +213,30 @@ async def quick_stats(
         "analyzed_by": current_user,
         "stats": stats
     }
+
+
+@router.post("/generate-report")
+async def generate_report(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+
+    contents = await file.read()
+
+    try:
+        pdf_bytes = generate_pdf_report(contents, file.filename, current_user)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=GenBI_Report_{file.filename}.pdf"
+        }
+    )
 
 
 @router.get("/files")

@@ -2,12 +2,24 @@ from prophet import Prophet
 import pandas as pd
 import io
 
+
+def read_dataframe(contents: bytes, filename: str) -> pd.DataFrame:
+    """
+    Reads CSV/Excel bytes into a DataFrame, safely handling files that
+    aren't strict UTF-8 (common in exports from Excel/legacy systems).
+    """
+    if filename.endswith(".csv"):
+        try:
+            return pd.read_csv(io.BytesIO(contents))
+        except UnicodeDecodeError:
+            return pd.read_csv(io.BytesIO(contents), encoding="latin-1")
+    else:
+        return pd.read_excel(io.BytesIO(contents))
+
+
 async def run_forecast(contents: bytes, filename: str, date_col: str, value_col: str, periods: int = 30):
     # Read file
-    if filename.endswith(".csv"):
-        df = pd.read_csv(io.BytesIO(contents))
-    else:
-        df = pd.read_excel(io.BytesIO(contents))
+    df = read_dataframe(contents, filename)
 
     # Validate columns exist
     if date_col not in df.columns:

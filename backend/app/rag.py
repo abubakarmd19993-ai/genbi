@@ -7,10 +7,25 @@ import io
 
 # Initialize embedding model and LLM
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
-llm = OllamaLLM(model="llama3.2")
+llm = OllamaLLM(model="llama3.2:1b")
 
 # ChromaDB storage path
 CHROMA_PATH = "chroma_db"
+
+
+def read_dataframe(contents: bytes, filename: str) -> pd.DataFrame:
+    """
+    Reads CSV/Excel bytes into a DataFrame, safely handling files that
+    aren't strict UTF-8 (common in exports from Excel/legacy systems).
+    """
+    if filename.endswith(".csv"):
+        try:
+            return pd.read_csv(io.BytesIO(contents))
+        except UnicodeDecodeError:
+            return pd.read_csv(io.BytesIO(contents), encoding="latin-1")
+    else:
+        return pd.read_excel(io.BytesIO(contents))
+
 
 def dataframe_to_documents(df: pd.DataFrame, filename: str):
     """Convert each row of a DataFrame into a LangChain Document."""
@@ -23,6 +38,7 @@ def dataframe_to_documents(df: pd.DataFrame, filename: str):
         ))
     return docs
 
+
 def get_vectorstore(collection_name: str):
     """Get or create a ChromaDB collection."""
     return Chroma(
@@ -31,12 +47,10 @@ def get_vectorstore(collection_name: str):
         persist_directory=CHROMA_PATH
     )
 
+
 async def ingest_file(contents: bytes, filename: str, file_id: str):
     """Chunk a file and store embeddings in ChromaDB."""
-    if filename.endswith(".csv"):
-        df = pd.read_csv(io.BytesIO(contents))
-    else:
-        df = pd.read_excel(io.BytesIO(contents))
+    df = read_dataframe(contents, filename)
 
     # Convert rows to documents
     docs = dataframe_to_documents(df, filename)
@@ -48,8 +62,8 @@ async def ingest_file(contents: bytes, filename: str, file_id: str):
     # Store in ChromaDB
     vectorstore = get_vectorstore(file_id)
     vectorstore.add_documents(chunks)
-
     return len(chunks)
+
 
 async def query_file(question: str, file_id: str):
     """Retrieve relevant chunks and generate an answer."""
@@ -67,9 +81,9 @@ Data:
 {context}
 
 Question: {question}
-
 Answer:"""
 
     # Generate answer
     answer = llm.invoke(prompt)
+
     return {"answer": answer, "context": context}

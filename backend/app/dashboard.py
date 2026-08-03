@@ -3,11 +3,15 @@ import numpy as np
 import io
 from langchain_ollama import OllamaLLM
 
-llm = OllamaLLM(model="llama3.2")
+llm = OllamaLLM(model="llama3.2:1b")
+
 
 def generate_dashboard(contents: bytes, filename: str) -> dict:
     if filename.endswith(".csv"):
-        df = pd.read_csv(io.BytesIO(contents))
+        try:
+            df = pd.read_csv(io.BytesIO(contents))
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(contents), encoding="latin-1")
     else:
         df = pd.read_excel(io.BytesIO(contents))
 

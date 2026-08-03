@@ -1,3 +1,4 @@
+from backend.app.sql_generator import generate_sql
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -144,6 +145,24 @@ async def root_cause_analysis(
     return {
         "message": "Root cause analysis completed",
         "analyzed_by": current_user,
+        **result
+    }
+@router.post("/generate-sql")
+async def generate_sql_query(
+    file: UploadFile = File(...),
+    question: str = "Show me the top 5 records by sales",
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+    contents = await file.read()
+    try:
+        result = generate_sql(contents, file.filename, question)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "message": "SQL generated successfully",
+        "generated_by": current_user,
         **result
     }
 

@@ -1,3 +1,4 @@
+import IndustryLoader from "./IndustryLoader";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -381,6 +382,9 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [sqlResult, setSqlResult] = useState(null);
   const [sqlLoading, setSqlLoading] = useState(false);
   const [sqlQuestion, setSqlQuestion] = useState("What is the total sales by category?");
+  const [industry, setIndustry] = useState(null);
+  const [industryLoading, setIndustryLoading] = useState(false);
+  const [detectedIndustry, setDetectedIndustry] = useState("general");
 
   const handleUpload = async (fileToUpload) => {
     const uploadFile = fileToUpload || file;
@@ -449,6 +453,23 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       showToast("SQL generation failed.", "error");
     }
     setSqlLoading(false);
+  };
+
+  const handleIndustry = async () => {
+    if (!file) return;
+    setIndustryLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/industry-intelligence`, formData, { headers });
+      setIndustry(res.data);
+      setDetectedIndustry(res.data.detected_industry);
+      showToast(`🏭 ${res.data.industry_display} intelligence ready!`, "success");
+    } catch (e) {
+      console.error("Industry analysis failed:", e);
+      showToast("❌ Industry analysis failed.", "error");
+    }
+    setIndustryLoading(false);
   };
 
   const handleDrop = (e) => {
@@ -554,6 +575,13 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               >
                 {sqlLoading ? "Generating..." : "🔷 SQL Query"}
               </button>
+              <button
+                onClick={handleIndustry}
+                disabled={industryLoading}
+                className="flex-1 bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
+              >
+                {industryLoading ? "Analyzing..." : "🏭 Industry Intel"}
+              </button>
             </div>
           </div>
 
@@ -653,6 +681,31 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               </div>
             )}
           </div>
+
+          {/* Industry Intelligence */}
+          {industryLoading && <IndustryLoader industry={detectedIndustry} />}
+          {industry && !industryLoading && (
+            <div className="bg-[#161b22] border border-[#bc8cff]/30 rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">
+                  {industry.detected_industry === "retail" ? "🛒"
+                  : industry.detected_industry === "finance" ? "💰"
+                  : industry.detected_industry === "healthcare" ? "🏥"
+                  : industry.detected_industry === "hr" ? "👥"
+                  : industry.detected_industry === "marketing" ? "📱"
+                  : industry.detected_industry === "manufacturing" ? "🏭"
+                  : "🔮"}
+                </span>
+                <div>
+                  <p className="text-[#bc8cff] font-semibold">{industry.industry_display} Intelligence</p>
+                  <p className="text-gray-500 text-xs">Industry auto-detected • {industry.records_analyzed} records analyzed</p>
+                </div>
+              </div>
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                {industry.intelligence}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -921,56 +974,202 @@ function ConsultantTool({ headers }) {
         <p className="text-green-400 text-xs">Your data is encrypted and private — we never share or sell your files</p>
       </div>
 
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
-          dragActive ? "border-[#ffa657] bg-[#ffa657]/5 scale-[1.01]" : "border-[var(--border-color)] hover:border-[#ffa657]/50"
-        }`}
-      >
-        <div className="text-5xl mb-4">{dragActive ? "📥" : "👔"}</div>
-        <p className="text-[var(--text-secondary)] mb-4">
-          {dragActive ? "Drop it right here!" : "Drop your file here or click to browse"}
-        </p>
-        <input
-          type="file"
-          accept=".csv,.xlsx"
-          onChange={(e) => {
-            setFile(e.target.files[0]);
-            setConsultant(null);
-            showToast(`"${e.target.files[0].name}" selected`, "info");
-          }}
-          className="hidden"
-          id="consultantFileInput"
-        />
-        <label
-          htmlFor="consultantFileInput"
-          className="bg-[var(--bg-panel-alt)] border border-[var(--border-color)] text-[var(--text-secondary)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#ffa657]/50 transition-all text-sm"
+      {!consultantLoading && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
+            dragActive ? "border-[#ffa657] bg-[#ffa657]/5 scale-[1.01]" : "border-[var(--border-color)] hover:border-[#ffa657]/50"
+          }`}
         >
-          Choose File
-        </label>
-        {file && <p className="text-[#ffa657] mt-3 text-sm">✅ {file.name}</p>}
-      </div>
+          <div className="text-5xl mb-4">{dragActive ? "📥" : "👔"}</div>
+          <p className="text-[var(--text-secondary)] mb-4">
+            {dragActive ? "Drop it right here!" : "Drop your file here or click to browse"}
+          </p>
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={(e) => {
+              setFile(e.target.files[0]);
+              setConsultant(null);
+              showToast(`"${e.target.files[0].name}" selected`, "info");
+            }}
+            className="hidden"
+            id="consultantFileInput"
+          />
+          <label
+            htmlFor="consultantFileInput"
+            className="bg-[var(--bg-panel-alt)] border border-[var(--border-color)] text-[var(--text-secondary)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#ffa657]/50 transition-all text-sm"
+          >
+            Choose File
+          </label>
+          {file && <p className="text-[#ffa657] mt-3 text-sm">✅ {file.name}</p>}
+        </div>
+      )}
 
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
-      <button
-        onClick={handleConsultant}
-        disabled={!file || consultantLoading}
-        className="w-full bg-[#ffa657] hover:bg-[#e6944e] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
-      >
-        {consultantLoading ? "Consulting..." : "Get Business Consultation 👔"}
-      </button>
+      {!consultantLoading && (
+        <button
+          onClick={handleConsultant}
+          disabled={!file}
+          className="w-full bg-[#ffa657] hover:bg-[#e6944e] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
+        >
+          Get Business Consultation 👔
+        </button>
+      )}
 
-      {consultant && (
-        <div className="mt-6 bg-[var(--bg-panel)] border border-[#ffa657]/30 rounded-2xl p-6">
-          <p className="text-[#ffa657] font-semibold mb-4">👔 AI Business Consultation</p>
-          <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
-            {consultant.consultation}
+      {consultantLoading && <ConsultantLoader fileName={file?.name} />}
+
+      {consultant && !consultantLoading && (
+        <ConsultantResult consultation={consultant.consultation} />
+      )}
+    </div>
+  );
+}
+
+// ── Consultant Loading Animation ─────────────────────────
+function ConsultantLoader({ fileName }) {
+  const stages = [
+    { icon: "📂", label: "Reading your data" },
+    { icon: "🧮", label: "Crunching the numbers" },
+    { icon: "📊", label: "Spotting trends & risks" },
+    { icon: "💼", label: "Weighing strategic options" },
+    { icon: "✍️", label: "Drafting recommendations" },
+    { icon: "✨", label: "Polishing the final report" },
+  ];
+  const [stageIndex, setStageIndex] = useState(0);
+  const [progress, setProgress] = useState(4);
+
+  useEffect(() => {
+    const stageTimer = setInterval(() => {
+      setStageIndex((i) => (i + 1 < stages.length ? i + 1 : i));
+    }, 2400);
+
+    // progress creeps up but never quite hits 100 until real data arrives
+    const progressTimer = setInterval(() => {
+      setProgress((p) => (p < 92 ? p + (92 - p) * 0.08 + 0.5 : p));
+    }, 200);
+
+    return () => {
+      clearInterval(stageTimer);
+      clearInterval(progressTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="bg-[var(--bg-panel)] border border-[#ffa657]/30 rounded-2xl p-8">
+      <style>{`
+        @keyframes consult-orbit { to { transform: rotate(360deg); } }
+        @keyframes consult-pulse {
+          0%, 100% { box-shadow: 0 0 10px 2px rgba(255,166,87,0.35); }
+          50% { box-shadow: 0 0 22px 8px rgba(255,166,87,0.55); }
+        }
+        @keyframes consult-fade-up {
+          0% { opacity: 0; transform: translateY(6px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes consult-bounce-dot {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+        .consult-ring { animation: consult-orbit 1.4s linear infinite; }
+        .consult-orb { animation: consult-pulse 1.8s ease-in-out infinite; }
+        .consult-stage { animation: consult-fade-up 0.4s ease-out; }
+        .consult-dot { animation: consult-bounce-dot 1.2s ease-in-out infinite; }
+      `}</style>
+
+      {/* Orbiting icon */}
+      <div className="flex flex-col items-center mb-6">
+        <div className="relative w-16 h-16 flex items-center justify-center mb-4">
+          <div
+            className="consult-ring absolute inset-0 rounded-full"
+            style={{
+              background: "conic-gradient(from 0deg, #ffa657, #f78166, #bc8cff, #ffa657)",
+              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0)",
+              mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0)",
+            }}
+          />
+          <div className="consult-orb w-11 h-11 rounded-full bg-[var(--bg-app)] flex items-center justify-center text-2xl">
+            {stages[stageIndex].icon}
           </div>
         </div>
-      )}
+
+        <p key={stageIndex} className="consult-stage text-[var(--text-primary)] font-medium text-sm mb-1">
+          {stages[stageIndex].label}
+          <span className="inline-flex gap-0.5 ml-1 align-middle">
+            <span className="consult-dot w-1 h-1 rounded-full bg-[var(--text-primary)] inline-block" style={{ animationDelay: "0s" }} />
+            <span className="consult-dot w-1 h-1 rounded-full bg-[var(--text-primary)] inline-block ml-0.5" style={{ animationDelay: "0.2s" }} />
+            <span className="consult-dot w-1 h-1 rounded-full bg-[var(--text-primary)] inline-block ml-0.5" style={{ animationDelay: "0.4s" }} />
+          </span>
+        </p>
+        {fileName && (
+          <p className="text-[var(--text-tertiary)] text-xs">analyzing {fileName}</p>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full bg-[var(--bg-panel-alt)] rounded-full h-2 overflow-hidden mb-3">
+        <div
+          className="h-full rounded-full transition-all duration-300 ease-out"
+          style={{
+            width: `${Math.min(progress, 96)}%`,
+            background: "linear-gradient(90deg, #ffa657, #f78166, #bc8cff)",
+          }}
+        />
+      </div>
+
+      {/* Stage checklist */}
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        {stages.map((s, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg transition-all ${
+              i < stageIndex
+                ? "text-green-400"
+                : i === stageIndex
+                ? "text-[#ffa657] bg-[#ffa657]/10"
+                : "text-[var(--text-quaternary)]"
+            }`}
+          >
+            <span>{i < stageIndex ? "✅" : s.icon}</span>
+            <span className="truncate">{s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-center text-[var(--text-tertiary)] text-xs mt-5">
+        Good advice takes a moment — your consultant is being thorough 🧠
+      </p>
+    </div>
+  );
+}
+
+// ── Consultant Result (animated reveal) ──────────────────
+function ConsultantResult({ consultation }) {
+  return (
+    <div className="mt-6">
+      <style>{`
+        @keyframes consult-result-in {
+          0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .consult-result { animation: consult-result-in 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+      `}</style>
+      <div className="consult-result bg-[var(--bg-panel)] border border-[#ffa657]/30 rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">👔</span>
+          <p className="text-[#ffa657] font-semibold">AI Business Consultation</p>
+          <span className="text-green-400 text-xs bg-green-500/10 px-2 py-0.5 rounded-full ml-auto">
+            ✅ Ready
+          </span>
+        </div>
+        <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
+          {consultation}
+        </div>
+      </div>
     </div>
   );
 }

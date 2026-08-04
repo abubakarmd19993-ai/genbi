@@ -7,11 +7,13 @@ from backend.app.forecast import run_forecast
 from backend.app.summary import generate_summary
 from backend.app.insights import generate_insights
 from backend.app.recommendations import generate_recommendations
+from backend.app.business_consultant import generate_business_consultation
+from backend.app.industry_intelligence import generate_industry_intelligence
 import pandas as pd
 import io
-
+ 
 router = APIRouter()
-
+ 
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -19,14 +21,14 @@ async def upload_file(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
+ 
     contents = await file.read()
-
+ 
     if file.filename.endswith(".csv"):
         df = pd.read_csv(io.BytesIO(contents))
     else:
         df = pd.read_excel(io.BytesIO(contents))
-
+ 
     file_meta = {
         "filename": file.filename,
         "rows": len(df),
@@ -35,10 +37,10 @@ async def upload_file(
     }
     result = await db.files.insert_one(file_meta)
     file_id = str(result.inserted_id)
-
+ 
     chunks = await ingest_file(contents, file.filename, file_id)
     summary = generate_summary(contents, file.filename)
-
+ 
     return {
         "message": "File uploaded and indexed successfully",
         "filename": file.filename,
@@ -49,7 +51,7 @@ async def upload_file(
         "chunks_indexed": chunks,
         "summary": summary
     }
-
+ 
 @router.post("/summarize")
 async def summarize_file(
     file: UploadFile = File(...),
@@ -57,16 +59,16 @@ async def summarize_file(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
+ 
     contents = await file.read()
-
+ 
     try:
         summary = generate_summary(contents, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+ 
     return summary
-
+ 
 @router.post("/insights")
 async def get_insights(
     file: UploadFile = File(...),
@@ -74,20 +76,20 @@ async def get_insights(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
+ 
     contents = await file.read()
-
+ 
     try:
         insights = generate_insights(contents, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+ 
     return {
         "message": "Insights generated successfully",
         "generated_by": current_user,
         **insights
     }
-
+ 
 @router.post("/recommendations")
 async def get_recommendations(
     file: UploadFile = File(...),
@@ -95,56 +97,95 @@ async def get_recommendations(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
+ 
     contents = await file.read()
-
+ 
     try:
         result = generate_recommendations(contents, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+ 
     return {
         "message": "Recommendations generated successfully",
         "generated_by": current_user,
         **result
     }
-
+ 
+@router.post("/business-consultant")
+async def business_consultant(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+ 
+    contents = await file.read()
+ 
+    try:
+        result = generate_business_consultation(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+ 
+    return {
+        "message": "Business consultation generated",
+        "generated_by": current_user,
+        **result
+    }
+ 
+@router.post("/industry-intelligence")
+async def industry_intelligence(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+    contents = await file.read()
+    try:
+        result = generate_industry_intelligence(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "message": "Industry intelligence generated",
+        "generated_by": current_user,
+        **result
+    }
+ 
 @router.get("/files")
 async def get_files(current_user: str = Depends(get_current_user)):
     files = await db.files.find({"uploaded_by": current_user}).to_list(100)
     for f in files:
         f["_id"] = str(f["_id"])
     return files
-
+ 
 class QueryRequest(BaseModel):
     question: str
     file_id: str
-
+ 
 @router.post("/query")
 async def query(request: QueryRequest, current_user: str = Depends(get_current_user)):
     result = await query_file(request.question, request.file_id)
-
+ 
     await db.query_history.insert_one({
         "question": request.question,
         "answer": result["answer"],
         "file_id": request.file_id,
         "asked_by": current_user
     })
-
+ 
     return {
         "question": request.question,
         "answer": result["answer"],
         "context": result["context"],
         "asked_by": current_user
     }
-
+ 
 @router.get("/query-history")
 async def get_query_history(current_user: str = Depends(get_current_user)):
     history = await db.query_history.find({"asked_by": current_user}).to_list(100)
     for h in history:
         h["_id"] = str(h["_id"])
     return history
-
+ 
 @router.post("/forecast")
 async def forecast(
     file: UploadFile = File(...),
@@ -155,14 +196,14 @@ async def forecast(
 ):
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
-
+ 
     contents = await file.read()
-
+ 
     try:
         result = await run_forecast(contents, file.filename, date_col, value_col, periods)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+ 
     await db.forecast_history.insert_one({
         "filename": file.filename,
         "date_column": date_col,
@@ -171,13 +212,13 @@ async def forecast(
         "forecast": result["forecast"],
         "forecasted_by": current_user
     })
-
+ 
     return {
         "message": "Forecast completed successfully",
         "uploaded_by": current_user,
         **result
     }
-
+ 
 @router.get("/forecast-history")
 async def get_forecast_history(current_user: str = Depends(get_current_user)):
     history = await db.forecast_history.find({"forecasted_by": current_user}).to_list(100)

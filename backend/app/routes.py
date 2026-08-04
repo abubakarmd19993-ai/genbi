@@ -1,23 +1,25 @@
+from backend.app.industry_intelligence import generate_industry_intelligence
 from backend.app.business_consultant import business_consultant_analysis
 from backend.app.sql_generator import generate_sql
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from fastapi.responses import Response
-from pydantic import BaseModel
-from backend.app.database import db
-from backend.app.auth import get_current_user
-from backend.app.rag import ingest_file, query_file
-from backend.app.forecast import run_forecast
-from backend.app.summary import generate_summary
-from backend.app.insights import generate_insights
-from backend.app.recommendations import generate_recommendations
-from backend.app.data_cleaning import analyze_data_quality
-from backend.app.dashboard import generate_dashboard
-from backend.app.pdf_report import generate_pdf_report
 from backend.app.root_cause import analyze_root_cause
+from backend.app.pdf_report import generate_pdf_report
+from backend.app.dashboard import generate_dashboard
+from backend.app.data_cleaning import analyze_data_quality
+from backend.app.recommendations import generate_recommendations
+from backend.app.insights import generate_insights
+from backend.app.summary import generate_summary
+from backend.app.forecast import run_forecast
+from backend.app.rag import ingest_file, query_file
+from backend.app.auth import get_current_user
+from backend.app.database import db
+from pydantic import BaseModel
+from fastapi.responses import Response
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 import pandas as pd
 import io
 
 router = APIRouter()
+
 
 @router.post("/upload")
 async def upload_file(
@@ -63,6 +65,7 @@ async def upload_file(
         "summary": summary
     }
 
+
 @router.post("/summarize")
 async def summarize_file(
     file: UploadFile = File(...),
@@ -76,6 +79,7 @@ async def summarize_file(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return summary
+
 
 @router.post("/insights")
 async def get_insights(
@@ -95,6 +99,7 @@ async def get_insights(
         **insights
     }
 
+
 @router.post("/recommendations")
 async def get_recommendations(
     file: UploadFile = File(...),
@@ -112,6 +117,7 @@ async def get_recommendations(
         "generated_by": current_user,
         **result
     }
+
 
 @router.post("/data-quality")
 async def data_quality(
@@ -131,6 +137,7 @@ async def data_quality(
         **result
     }
 
+
 @router.post("/root-cause")
 async def root_cause_analysis(
     file: UploadFile = File(...),
@@ -148,6 +155,8 @@ async def root_cause_analysis(
         "analyzed_by": current_user,
         **result
     }
+
+
 @router.post("/generate-sql")
 async def generate_sql_query(
     file: UploadFile = File(...),
@@ -166,6 +175,8 @@ async def generate_sql_query(
         "generated_by": current_user,
         **result
     }
+
+
 @router.post("/business-consultant")
 async def business_consultant(
     file: UploadFile = File(...),
@@ -183,6 +194,26 @@ async def business_consultant(
         "consulted_by": current_user,
         **result
     }
+
+
+@router.post("/industry-intelligence")
+async def industry_intelligence(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+    contents = await file.read()
+    try:
+        result = generate_industry_intelligence(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "message": "Industry intelligence generated",
+        "generated_by": current_user,
+        **result
+    }
+
 
 @router.post("/dashboard")
 async def create_dashboard(
@@ -202,6 +233,7 @@ async def create_dashboard(
         **result
     }
 
+
 @router.post("/generate-report")
 async def generate_report(
     file: UploadFile = File(...),
@@ -219,6 +251,7 @@ async def generate_report(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=GenBI_Report_{file.filename}.pdf"}
     )
+
 
 @router.post("/quickstats")
 async def quick_stats(
@@ -256,6 +289,7 @@ async def quick_stats(
         "stats": stats
     }
 
+
 @router.get("/files")
 async def get_files(current_user: str = Depends(get_current_user)):
     files = await db.files.find({"uploaded_by": current_user}).to_list(100)
@@ -263,9 +297,11 @@ async def get_files(current_user: str = Depends(get_current_user)):
         f["_id"] = str(f["_id"])
     return files
 
+
 class QueryRequest(BaseModel):
     question: str
     file_id: str
+
 
 @router.post("/query")
 async def query(request: QueryRequest, current_user: str = Depends(get_current_user)):
@@ -283,12 +319,14 @@ async def query(request: QueryRequest, current_user: str = Depends(get_current_u
         "asked_by": current_user
     }
 
+
 @router.get("/query-history")
 async def get_query_history(current_user: str = Depends(get_current_user)):
     history = await db.query_history.find({"asked_by": current_user}).to_list(100)
     for h in history:
         h["_id"] = str(h["_id"])
     return history
+
 
 @router.post("/forecast")
 async def forecast(
@@ -318,6 +356,7 @@ async def forecast(
         "uploaded_by": current_user,
         **result
     }
+
 
 @router.get("/forecast-history")
 async def get_forecast_history(current_user: str = Depends(get_current_user)):

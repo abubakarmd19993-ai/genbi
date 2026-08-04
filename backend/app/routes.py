@@ -1,3 +1,4 @@
+from backend.app.business_consultant import business_consultant_analysis
 from backend.app.sql_generator import generate_sql
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import Response
@@ -163,6 +164,23 @@ async def generate_sql_query(
     return {
         "message": "SQL generated successfully",
         "generated_by": current_user,
+        **result
+    }
+@router.post("/business-consultant")
+async def business_consultant(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+    contents = await file.read()
+    try:
+        result = business_consultant_analysis(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "message": "Business consultation completed",
+        "consulted_by": current_user,
         **result
     }
 

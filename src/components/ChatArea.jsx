@@ -377,6 +377,8 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [sqlResult, setSqlResult] = useState(null);
   const [sqlLoading, setSqlLoading] = useState(false);
   const [sqlQuestion, setSqlQuestion] = useState("What is the total sales by category?");
+  const [consultant, setConsultant] = useState(null);
+  const [consultantLoading, setConsultantLoading] = useState(false);
 
   const handleUpload = async (fileToUpload) => {
     const uploadFile = fileToUpload || file;
@@ -445,6 +447,22 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       showToast("SQL generation failed.", "error");
     }
     setSqlLoading(false);
+  };
+
+  const handleConsultant = async () => {
+    if (!file) return;
+    setConsultantLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/business-consultant`, formData, { headers });
+      setConsultant(res.data);
+      showToast("👔 Business consultation complete!", "success");
+    } catch (e) {
+      console.error("Business consultant failed:", e);
+      showToast("❌ Business consultation failed.", "error");
+    }
+    setConsultantLoading(false);
   };
 
   const handleDrop = (e) => {
@@ -551,6 +569,17 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
                 {sqlLoading ? "Generating..." : "🔷 SQL Query"}
               </button>
             </div>
+
+            {/* Action Buttons Row 3 */}
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={handleConsultant}
+                disabled={consultantLoading}
+                className="flex-1 bg-[#ffa657]/20 border border-[#ffa657]/30 text-[#ffa657] py-2 rounded-xl text-sm hover:bg-[#ffa657]/30 transition-all disabled:opacity-50"
+              >
+                {consultantLoading ? "Consulting..." : "👔 AI Consultant"}
+              </button>
+            </div>
           </div>
 
           {result.summary && (
@@ -618,7 +647,7 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
             </div>
           )}
 
-         {/* SQL Generator */}
+          {/* SQL Generator */}
           <div className="bg-[#161b22] border border-[#58a6ff]/30 rounded-2xl p-4">
             <p className="text-[#58a6ff] font-semibold mb-3">🔷 AI SQL Generator</p>
             <div className="flex gap-2 mb-3">
@@ -629,8 +658,11 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
                 placeholder="Ask a question to generate SQL..."
                 className="flex-1 bg-[#0d0d0d] border border-[#30363d] rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-[#58a6ff] transition-all"
               />
-              <button onClick={handleSQL} disabled={sqlLoading}
-                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] px-4 py-2 rounded-xl text-xs hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50">
+              <button
+                onClick={handleSQL}
+                disabled={sqlLoading}
+                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] px-4 py-2 rounded-xl text-xs hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+              >
                 {sqlLoading ? "..." : "Generate"}
               </button>
             </div>
@@ -646,6 +678,21 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               </div>
             )}
           </div>
+
+          {/* Business Consultant */}
+          {consultant && (
+            <div className="bg-[#161b22] border border-[#ffa657]/30 rounded-2xl p-6">
+              <p className="text-[#ffa657] font-semibold mb-4">👔 AI Business Consultant</p>
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                {consultant.consultation}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Forecast Tool ────────────────────────────────────────
 function ForecastTool({ headers }) {
@@ -696,165 +743,3 @@ function ForecastTool({ headers }) {
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Date Column</label>
-            <input
-              value={dateCol}
-              onChange={(e) => setDateCol(e.target.value)}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
-            />
-          </div>
-          <div>
-            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Value Column</label>
-            <input
-              value={valueCol}
-              onChange={(e) => setValueCol(e.target.value)}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
-            />
-          </div>
-          <div>
-            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Periods</label>
-            <input
-              type="number"
-              value={periods}
-              onChange={(e) => setPeriods(e.target.value)}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
-            />
-          </div>
-        </div>
-      </div>
-      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-      <button onClick={handleForecast} disabled={!file || loading}
-        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all mb-6">
-        {loading ? "Running Forecast..." : "Run Forecast 📈"}
-      </button>
-      {result && (
-        <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
-          <p className="text-green-400 font-medium mb-4">
-            ✅ Forecast completed! {result.periods_forecasted} periods predicted.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[var(--border-color)]">
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Date</th>
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Predicted</th>
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Lower</th>
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Upper</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.forecast?.slice(0, 10).map((row, i) => (
-                  <tr key={i} className="border-b border-[var(--border-color)]/50">
-                    <td className="text-[var(--text-secondary)] py-2">{row.ds}</td>
-                    <td className="text-[#f78166] py-2">{Math.round(row.yhat).toLocaleString()}</td>
-                    <td className="text-[var(--text-tertiary)] py-2">{Math.round(row.yhat_lower).toLocaleString()}</td>
-                    <td className="text-[var(--text-tertiary)] py-2">{Math.round(row.yhat_upper).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {result.forecast?.length > 10 && (
-              <p className="text-[var(--text-tertiary)] text-xs mt-2">
-                Showing 10 of {result.forecast.length} predictions
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Files Tool ───────────────────────────────────────────
-function FilesTool({ headers, setFileId, setActiveTool }) {
-  const [files, setFiles] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-  const { showToast } = useToast();
-
-  const loadFiles = async () => {
-    try {
-      const res = await axios.get(`${API}/files`, { headers });
-      setFiles(res.data);
-      setLoaded(true);
-    } catch {
-      setLoaded(true);
-      showToast("Failed to load files.", "error");
-    }
-  };
-
-  if (!loaded) loadFiles();
-
-  return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">🗂️ My Files</h2>
-      <p className="text-[var(--text-secondary)] mb-6">All files you have uploaded</p>
-
-      {files.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-5xl mb-4 animate-bounce">📂</p>
-          <p className="text-[var(--text-secondary)]">No files uploaded yet</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {files.map((f, i) => (
-            <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[var(--text-primary)] font-medium text-sm">📄 {f.filename}</p>
-                <button
-                  onClick={() => { setFileId(f._id); setActiveTool("chat"); showToast(`Chatting with ${f.filename}`, "info"); }}
-                  className="text-[#f78166] text-xs hover:underline"
-                >Chat with this →</button>
-              </div>
-              <div className="flex gap-4 text-xs text-[var(--text-tertiary)]">
-                <span>📊 {f.rows} rows</span>
-                <span>🗂️ {f.columns?.join(", ")}</span>
-              </div>
-              <p className="text-[var(--text-quaternary)] font-mono text-xs mt-2 truncate">ID: {f._id}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── History Tool ─────────────────────────────────────────
-function HistoryTool({ headers }) {
-  const [history, setHistory] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-
-  const loadHistory = async () => {
-    try {
-      const res = await axios.get(`${API}/query-history`, { headers });
-      setHistory(res.data);
-      setLoaded(true);
-    } catch {
-      setLoaded(true);
-    }
-  };
-
-  if (!loaded) loadHistory();
-
-  return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📜 Query History</h2>
-      <p className="text-[var(--text-secondary)] mb-6">Your past questions and answers</p>
-
-      {history.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-5xl mb-4 animate-bounce">📜</p>
-          <p className="text-[var(--text-secondary)]">No queries yet</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {history.map((h, i) => (
-            <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-4">
-              <p className="text-[#f78166] text-sm font-medium mb-2">❓ {h.question}</p>
-              <p className="text-[var(--text-secondary)] text-xs leading-relaxed line-clamp-3">{h.answer}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

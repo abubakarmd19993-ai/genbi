@@ -1,23 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import AILoading from "./AILoading";
-import ChartDashboard from "./Dashboard";
 import axios from "axios";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, ResponsiveContainer, Legend
-} from "recharts";
 
 const API = "http://127.0.0.1:8000";
-const PIE_COLORS = ["#f78166", "#bc8cff", "#58a6ff", "#3fb950", "#f0883e", "#db61a2"];
 
-export default function ChatArea({ activeTool, setActiveTool, setChats }) {
+export default function ChatArea({ activeTool, setActiveTool, setChats, setActiveChat, standalone = false }) {
   const { username, token } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [fileId, setFileId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [typingIndex, setTypingIndex] = useState(null);
+  const [listening, setListening] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -35,53 +33,86 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
     { icon: "⚙️", title: "Embedder", desc: "Convert any file to embeddings", id: "embed" },
     { icon: "🗂️", title: "My Files", desc: "View all your uploaded files", id: "files" },
     { icon: "📜", title: "History", desc: "View past queries and forecasts", id: "history" },
+    { icon: "👔", title: "AI Consultant", desc: "Get expert business advice from your data", id: "consultant" },
   ];
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    if (!fileId) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Please upload a file first and enter the File ID to ask questions about your data."
-      }]);
-      return;
-    }
-
-    const userMsg = { role: "user", content: input };
-    setMessages(prev => [...prev, userMsg]);
+  const sendMessage = async (question, fid) => {
+    const userMsg = { role: "user", content: question };
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
 
     try {
-      const res = await axios.post(`${API}/query`,
-        { question: input, file_id: fileId },
-        { headers }
-      );
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: res.data.answer
-      }]);
-      if (setChats) {
-        setChats(prev => [...prev, {
-          question: input,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        }]);
-      }
+      const res = await axios.post(`${API}/query`, { question, file_id: fid }, { headers });
+      setMessages((prev) => {
+        const next = [...prev, { role: "assistant", content: res.data.answer }];
+        setTypingIndex(next.length - 1);
+        return next;
+      });
+      setChats((prev) => [
+        ...prev,
+        { question, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+      ]);
     } catch {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Sorry, something went wrong. Please try again."
-      }]);
+      setMessages((prev) => {
+        const next = [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }];
+        setTypingIndex(next.length - 1);
+        return next;
+      });
     }
     setLoading(false);
   };
 
-  if (activeTool === "dashboard") {
-    return <ChartDashboard headers={headers} />;
-  }
-  if (activeTool === "autodashboard") {
-    return <ChartDashboard headers={headers} />;
-  }
+  useEffect(() => {
+    if (!standalone && location.state?.pendingMessage) {
+      const msg = location.state.pendingMessage;
+      const fid = location.state.pendingFileId;
+      if (fid) setFileId(fid);
+      sendMessage(msg, fid);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    if (!fileId) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Please upload a file first and enter the File ID to ask questions about your data." },
+      ]);
+      return;
+    }
+
+    if (standalone) {
+      navigate("/workspace/chat", { state: { pendingMessage: input, pendingFileId: fileId } });
+      return;
+    }
+
+    await sendMessage(input, fileId);
+  };
+
+  const handleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice input isn't supported in this browser. Try Chrome.");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev) => (prev ? prev + " " + transcript : transcript));
+    };
+
+    recognition.start();
+  };
+
   if (activeTool === "upload") {
     return <UploadTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   }
@@ -94,13 +125,24 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   if (activeTool === "history") {
     return <HistoryTool headers={headers} />;
   }
+  if (activeTool === "consultant") {
+    return <ConsultantTool headers={headers} />;
+  }
 
   return (
     <div className="flex-1 flex flex-col">
+      <style>{`
+        @keyframes msg-slide-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .msg-animate { animation: msg-slide-in 0.3s ease-out; }
+      `}</style>
+
       {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <h1 className="text-4xl font-bold text-[var(--text-hi)] mb-2">Hello, {username}! 👋</h1>
-          <p className="text-[var(--text-mid)] text-xl mb-8">How can I help you today?</p>
+          <h1 className="text-4xl font-bold text-[var(--text-primary)] mb-2">Hello, {username}! 👋</h1>
+          <p className="text-[var(--text-secondary)] text-xl mb-8">How can I help you today?</p>
 
           {fileId && (
             <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2 text-green-400 text-sm">
@@ -113,7 +155,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
               <button
                 key={i}
                 onClick={() => setInput(action.text)}
-                className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] hover:border-[#f78166]/50 text-[var(--text-mid)] text-sm px-4 py-2 rounded-xl transition-all flex items-center gap-2"
+                className="bg-[var(--bg-panel)] border border-[var(--border-color)] hover:border-[#f78166]/50 text-[var(--text-secondary)] text-sm px-4 py-2 rounded-xl transition-all flex items-center gap-2"
               >
                 <span>{action.icon}</span>
                 <span>{action.text}</span>
@@ -126,13 +168,13 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
               <button
                 key={i}
                 onClick={() => setActiveTool(action.id)}
-                className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] hover:border-[#f78166]/50 rounded-xl p-4 text-left transition-all group"
+                className="bg-[var(--bg-panel)] border border-[var(--border-color)] hover:border-[#f78166]/50 rounded-xl p-4 text-left transition-all group"
               >
                 <span className="text-2xl mb-2 block">{action.icon}</span>
-                <p className="text-[var(--text-hi)] text-sm font-medium group-hover:text-[#f78166] transition-all">
+                <p className="text-[var(--text-primary)] text-sm font-medium group-hover:text-[#f78166] transition-all">
                   {action.title}
                 </p>
-                <p className="text-[var(--text-low)] text-xs mt-1">{action.desc}</p>
+                <p className="text-[var(--text-tertiary)] text-xs mt-1">{action.desc}</p>
               </button>
             ))}
           </div>
@@ -140,40 +182,51 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
       ) : (
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-2xl rounded-2xl px-4 py-3 ${
-                msg.role === "user"
-                  ? "bg-[#f78166] text-[var(--text-hi)]"
-                  : "bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] text-[var(--text-mid)]"
-              }`}>
+            <div key={i} className={`flex msg-animate ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`max-w-2xl rounded-2xl px-4 py-3 group relative ${
+                  msg.role === "user"
+                    ? "bg-[#f78166] text-white"
+                    : "bg-[var(--bg-panel)] border border-[var(--border-color)] text-[var(--text-secondary)]"
+                }`}
+              >
                 {msg.role === "assistant" && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <span>🔮</span>
-                    <span className="text-[#f78166] text-xs font-medium">GenBI</span>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span>🔮</span>
+                      <span className="text-[#f78166] text-xs font-medium">GenBI</span>
+                    </div>
+                    <CopyButton text={msg.content} />
                   </div>
                 )}
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <p className="text-sm whitespace-pre-wrap">
+                  {msg.role === "assistant" && i === typingIndex ? (
+                    <TypingText text={msg.content} onDone={() => setTypingIndex(null)} />
+                  ) : (
+                    msg.content
+                  )}
+                </p>
               </div>
             </div>
           ))}
-          {loading && <AILoading />}
+          {loading && <ThinkingLoader />}
         </div>
       )}
 
-      <div className="p-4 border-t border-[var(--glass-border)]">
+      <div className="p-4 border-t border-[var(--border-color)]">
         <div className="mb-2">
           <input
             type="text"
             value={fileId}
             onChange={(e) => setFileId(e.target.value)}
             placeholder="Paste File ID here to chat with your data..."
-            className="w-full bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-mid)] text-xs focus:outline-none focus:border-[#f78166]/50 transition-all"
+            className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-[var(--text-secondary)] text-xs focus:outline-none focus:border-[#f78166]/50 transition-all"
           />
         </div>
-        <div className="flex items-center gap-3 bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl px-4 py-3 focus-within:border-[#f78166]/50 transition-all">
+        <div className="flex items-center gap-3 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl px-4 py-3 focus-within:border-[#f78166]/50 transition-all">
           <button
             onClick={() => setActiveTool("upload")}
-            className="text-[var(--text-low)] hover:text-[#f78166] transition-all text-lg"
+            className="text-[var(--text-tertiary)] hover:text-[#f78166] transition-all text-lg"
             title="Upload file"
           >
             📎
@@ -184,14 +237,21 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Ask GenBI anything..."
-            className="flex-1 bg-transparent text-[var(--text-hi)] placeholder-[var(--text-low)] outline-none text-sm"
+            className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-quaternary)] outline-none text-sm"
           />
+          <button
+            onClick={handleVoiceInput}
+            className={`text-lg transition-all ${listening ? "text-red-400 animate-pulse" : "text-[var(--text-tertiary)] hover:text-[#f78166]"}`}
+            title="Voice input"
+          >
+            🎤
+          </button>
           <button
             onClick={handleSend}
             disabled={loading || !input.trim()}
             className="w-8 h-8 bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-30 rounded-xl flex items-center justify-center transition-all"
           >
-            <span className="text-[var(--text-hi)] text-sm">→</span>
+            <span className="text-white text-sm">→</span>
           </button>
         </div>
       </div>
@@ -199,95 +259,118 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   );
 }
 
-// ── Auto Dashboard Generator (charts from uploaded file columns) ──
-function AutoDashboardCharts({ columnInfo }) {
-  if (!columnInfo) return null;
+// ── Copy Button ───────────────────────────────────────────
+function CopyButton({ text }) {
+  const { showToast } = useToast();
+  const [copied, setCopied] = useState(false);
 
-  const numericCols = Object.entries(columnInfo).filter(([, info]) => info.min !== undefined);
-  const categoricalCols = Object.entries(columnInfo).filter(([, info]) => info.min === undefined && info.top_values);
-
-  if (numericCols.length === 0 && categoricalCols.length === 0) {
-    return <p className="text-[var(--text-low)] text-sm">Not enough column data to build charts.</p>;
-  }
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      showToast("Copied to clipboard!", "success");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      showToast("Couldn't copy. Try selecting manually.", "error");
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {numericCols.length > 0 && (
-        <div>
-          <p className="text-[var(--text-mid)] text-xs font-medium mb-3">📈 Numeric Columns (Min / Avg / Max)</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {numericCols.map(([col, info]) => {
-              const data = [
-                { name: "Min", value: info.min },
-                { name: "Avg", value: info.mean },
-                { name: "Max", value: info.max },
-              ];
-              return (
-                <div key={col} className="bg-[var(--bg-void)] rounded-xl p-4">
-                  <p className="text-[var(--text-hi)] text-xs font-medium mb-2">{col}</p>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={data}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-                      <XAxis dataKey="name" stroke="#8b949e" fontSize={11} />
-                      <YAxis stroke="#8b949e" fontSize={11} />
-                      <Tooltip
-                        contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, fontSize: 12 }}
-                        labelStyle={{ color: "#fff" }}
-                      />
-                      <Bar dataKey="value" fill="#f78166" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+    <button
+      onClick={handleCopy}
+      className="text-[var(--text-tertiary)] hover:text-[#f78166] text-xs opacity-0 group-hover:opacity-100 transition-all"
+      title="Copy answer"
+    >
+      {copied ? "✅ Copied" : "📋 Copy"}
+    </button>
+  );
+}
 
-      {categoricalCols.length > 0 && (
-        <div>
-          <p className="text-[var(--text-mid)] text-xs font-medium mb-3">🥧 Categorical Columns (Top Values)</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {categoricalCols.map(([col, info]) => {
-              const data = Object.entries(info.top_values || {}).map(([name, value]) => ({ name, value }));
-              if (data.length === 0) return null;
-              return (
-                <div key={col} className="bg-[var(--bg-void)] rounded-xl p-4">
-                  <p className="text-[var(--text-hi)] text-xs font-medium mb-2">{col}</p>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie
-                        data={data}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={70}
-                        label={{ fontSize: 11, fill: "#8b949e" }}
-                      >
-                        {data.map((_, i) => (
-                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, fontSize: 12 }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11, color: "#8b949e" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              );
-            })}
+// ── Typing Effect ─────────────────────────────────────────
+function TypingText({ text, onDone }) {
+  const [display, setDisplay] = useState("");
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    doneRef.current = false;
+    setDisplay("");
+    let i = 0;
+    const words = text.split(" ");
+    const interval = setInterval(() => {
+      i++;
+      setDisplay(words.slice(0, i).join(" "));
+      if (i >= words.length) {
+        clearInterval(interval);
+        if (!doneRef.current) {
+          doneRef.current = true;
+          onDone && onDone();
+        }
+      }
+    }, 35);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+
+  return <>{display}</>;
+}
+
+// ── Animated Thinking Loader ─────────────────────────────
+function ThinkingLoader() {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const phrases = ["Reading your data...", "Crunching the numbers...", "Connecting the dots...", "Almost there..."];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhraseIndex((i) => (i + 1) % phrases.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex justify-start">
+      <style>{`
+        @keyframes genbi-spin { to { transform: rotate(360deg); } }
+        @keyframes genbi-pulse-glow {
+          0%, 100% { box-shadow: 0 0 8px 2px rgba(247,129,102,0.4); }
+          50% { box-shadow: 0 0 16px 6px rgba(188,140,255,0.5); }
+        }
+        @keyframes genbi-fade-slide {
+          0% { opacity: 0; transform: translateY(4px); }
+          15% { opacity: 1; transform: translateY(0); }
+          85% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-4px); }
+        }
+        .genbi-ring { animation: genbi-spin 1.2s linear infinite; }
+        .genbi-orb { animation: genbi-pulse-glow 1.6s ease-in-out infinite; }
+        .genbi-phrase { animation: genbi-fade-slide 1.8s ease-in-out; }
+      `}</style>
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl px-4 py-3 flex items-center gap-3">
+        <div className="relative w-7 h-7 flex items-center justify-center shrink-0">
+          <div
+            className="genbi-ring absolute inset-0 rounded-full"
+            style={{
+              background: "conic-gradient(from 0deg, #f78166, #bc8cff, #58a6ff, #f78166)",
+              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0)",
+              mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0)",
+            }}
+          ></div>
+          <div className="genbi-orb w-3.5 h-3.5 rounded-full bg-[var(--bg-app)] flex items-center justify-center text-[10px]">
+            🔮
           </div>
         </div>
-      )}
+        <span key={phraseIndex} className="genbi-phrase text-[var(--text-secondary)] text-sm min-w-[160px]">
+          {phrases[phraseIndex]}
+        </span>
+      </div>
     </div>
   );
 }
 
 // ── Upload Tool ──────────────────────────────────────────
 function UploadTool({ headers, setFileId, setActiveTool }) {
+  const { showToast } = useToast();
   const [file, setFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -295,32 +378,26 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [recommendations, setRecommendations] = useState(null);
   const [recsLoading, setRecsLoading] = useState(false);
-  const [dataQuality, setDataQuality] = useState(null);
-  const [qualityLoading, setQualityLoading] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [rootCause, setRootCause] = useState(null);
-  const [rootCauseLoading, setRootCauseLoading] = useState(false);
-  const [showAutoDashboard, setShowAutoDashboard] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [sqlResult, setSqlResult] = useState(null);
   const [sqlLoading, setSqlLoading] = useState(false);
   const [sqlQuestion, setSqlQuestion] = useState("What is the total sales by category?");
-  const { showToast } = useToast();
 
-  const handleUpload = async () => {
-    if (!file) return;
+  const handleUpload = async (fileToUpload) => {
+    const uploadFile = fileToUpload || file;
+    if (!uploadFile) return;
     setLoading(true);
     setError("");
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadFile);
     try {
       const res = await axios.post(`${API}/upload`, formData, { headers });
       setResult(res.data);
       setFileId(res.data.file_id);
-      showToast(`✅ ${res.data.filename} uploaded successfully!`, "success");
+      showToast("File uploaded and indexed successfully!", "success");
     } catch (e) {
-      setError(e.response?.data?.detail || "Upload failed");
-      showToast("❌ Upload failed. Please try again.", "error");
+      const msg = e.response?.data?.detail || "Upload failed";
+      setError(msg);
+      showToast(msg, "error");
     }
     setLoading(false);
   };
@@ -333,9 +410,10 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
     try {
       const res = await axios.post(`${API}/insights`, formData, { headers });
       setInsights(res.data);
-      showToast("🔮 Executive insights generated!", "success");
+      showToast("Insights generated!", "success");
     } catch (e) {
-      showToast("❌ Failed to generate insights.", "error");
+      console.error("Insights failed:", e);
+      showToast("Couldn't generate insights.", "error");
     }
     setInsightsLoading(false);
   };
@@ -348,65 +426,12 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
     try {
       const res = await axios.post(`${API}/recommendations`, formData, { headers });
       setRecommendations(res.data);
-      showToast("💡 Business recommendations ready!", "success");
+      showToast("Recommendations ready!", "success");
     } catch (e) {
-      showToast("❌ Failed to generate recommendations.", "error");
+      console.error("Recommendations failed:", e);
+      showToast("Couldn't generate recommendations.", "error");
     }
     setRecsLoading(false);
-  };
-
-  const handleDataQuality = async () => {
-    if (!file) return;
-    setQualityLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await axios.post(`${API}/data-quality`, formData, { headers });
-      setDataQuality(res.data);
-      showToast("🧹 Data quality analysis complete!", "success");
-    } catch (e) {
-      showToast("❌ Data quality analysis failed.", "error");
-    }
-    setQualityLoading(false);
-  };
-
-  const handlePDFReport = async () => {
-    if (!file) return;
-    setPdfLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await axios.post(`${API}/generate-report`, formData, {
-        headers: { ...headers, "Content-Type": "multipart/form-data" },
-        responseType: "blob"
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `GenBI_Report_${file.name}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      showToast("📄 PDF Report downloaded!", "success");
-    } catch (e) {
-      showToast("❌ PDF generation failed.", "error");
-    }
-    setPdfLoading(false);
-  };
-
-  const handleRootCause = async () => {
-    if (!file) return;
-    setRootCauseLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await axios.post(`${API}/root-cause`, formData, { headers });
-      setRootCause(res.data);
-      showToast("🔍 Root cause analysis complete!", "success");
-    } catch (e) {
-      showToast("❌ Root cause analysis failed.", "error");
-    }
-    setRootCauseLoading(false);
   };
 
   const handleSQL = async () => {
@@ -418,29 +443,28 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
     try {
       const res = await axios.post(`${API}/generate-sql`, formData, { headers });
       setSqlResult(res.data);
-      showToast("🔷 SQL generated successfully!", "success");
+      showToast("SQL generated successfully!", "success");
     } catch (e) {
-      showToast("❌ SQL generation failed.", "error");
+      console.error("SQL generation failed:", e);
+      showToast("SQL generation failed.", "error");
     }
     setSqlLoading(false);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.name.endsWith(".csv") || droppedFile.name.endsWith(".xlsx"))) {
-      setFile(droppedFile);
-      showToast(`📎 ${droppedFile.name} selected!`, "info");
-    } else {
-      showToast("❌ Only CSV and Excel files allowed.", "error");
+    setDragActive(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) {
+      setFile(dropped);
+      showToast(`"${dropped.name}" ready to upload`, "info");
     }
   };
 
   return (
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full overflow-y-auto">
-      <h2 className="text-2xl font-bold text-[var(--text-hi)] mb-2">📁 Upload File</h2>
-      <p className="text-[var(--text-mid)] mb-4">Upload your CSV or Excel file to start analyzing</p>
+      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📁 Upload File</h2>
+      <p className="text-[var(--text-secondary)] mb-4">Upload your CSV or Excel file to start analyzing</p>
 
       <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2 mb-6">
         <span>🔒</span>
@@ -448,29 +472,30 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       </div>
 
       <div
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragLeave={() => setDragActive(false)}
         onDrop={handleDrop}
         className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
-          isDragging ? "border-[#f78166] bg-[#f78166]/10" : "border-[var(--glass-border)] hover:border-[#f78166]/50"
+          dragActive ? "border-[#f78166] bg-[#f78166]/5 scale-[1.01]" : "border-[var(--border-color)] hover:border-[#f78166]/50"
         }`}
       >
-        <div className="text-5xl mb-4">{isDragging ? "📂" : "📁"}</div>
-        <p className="text-[var(--text-mid)] mb-2">{isDragging ? "Drop your file here!" : "Drag & drop or click to browse"}</p>
-        <p className="text-[var(--text-low)] text-xs mb-4">Supports CSV and Excel files</p>
+        <div className="text-5xl mb-4">{dragActive ? "📥" : "📂"}</div>
+        <p className="text-[var(--text-secondary)] mb-4">
+          {dragActive ? "Drop it right here!" : "Drop your file here or click to browse"}
+        </p>
         <input
           type="file"
           accept=".csv,.xlsx"
           onChange={(e) => {
             setFile(e.target.files[0]);
-            showToast(`📎 ${e.target.files[0].name} selected!`, "info");
+            showToast(`"${e.target.files[0].name}" selected`, "info");
           }}
           className="hidden"
           id="fileInput"
         />
         <label
           htmlFor="fileInput"
-          className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] text-[var(--text-mid)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#f78166]/50 transition-all text-sm"
+          className="bg-[var(--bg-panel-alt)] border border-[var(--border-color)] text-[var(--text-secondary)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#f78166]/50 transition-all text-sm"
         >
           Choose File
         </label>
@@ -480,96 +505,62 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
       <button
-        onClick={handleUpload}
+        onClick={() => handleUpload()}
         disabled={!file || loading}
-        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-[var(--text-hi)] font-semibold py-3 rounded-xl transition-all"
+        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
       >
         {loading ? "Uploading & Indexing..." : "Upload & Index 🚀"}
       </button>
 
       {result && (
         <div className="mt-6 space-y-4">
-          <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
             <p className="text-green-400 font-medium mb-4">✅ File uploaded successfully!</p>
             <div className="space-y-2 text-sm">
-              <p className="text-[var(--text-mid)]">📄 <span className="text-[var(--text-hi)]">{result.filename}</span></p>
-              <p className="text-[var(--text-mid)]">📊 Rows: <span className="text-[var(--text-hi)]">{result.rows}</span></p>
-              <p className="text-[var(--text-mid)]">🗂️ Columns: <span className="text-[var(--text-hi)]">{result.columns?.join(", ")}</span></p>
-              <p className="text-[var(--text-mid)]">🧩 Chunks: <span className="text-[var(--text-hi)]">{result.chunks_indexed}</span></p>
-              <div className="bg-[var(--bg-void)] rounded-xl p-3 mt-3">
-                <p className="text-[var(--text-low)] text-xs mb-1">File ID (copy this):</p>
+              <p className="text-[var(--text-secondary)]">📄 <span className="text-[var(--text-primary)]">{result.filename}</span></p>
+              <p className="text-[var(--text-secondary)]">📊 Rows: <span className="text-[var(--text-primary)]">{result.rows}</span></p>
+              <p className="text-[var(--text-secondary)]">🗂️ Columns: <span className="text-[var(--text-primary)]">{result.columns?.join(", ")}</span></p>
+              <p className="text-[var(--text-secondary)]">🧩 Chunks: <span className="text-[var(--text-primary)]">{result.chunks_indexed}</span></p>
+              <div className="bg-[var(--bg-panel-alt)] rounded-xl p-3 mt-3">
+                <p className="text-[var(--text-tertiary)] text-xs mb-1">File ID (copy this):</p>
                 <p className="text-[#f78166] font-mono text-xs break-all">{result.file_id}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-4">
+            <div className="flex gap-2 mt-4">
               <button
                 onClick={() => setActiveTool("chat")}
-                className="bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
+                className="flex-1 bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
               >
                 Start Chatting →
               </button>
               <button
                 onClick={handleInsights}
                 disabled={insightsLoading}
-                className="bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
+                className="flex-1 bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
               >
                 {insightsLoading ? "Analyzing..." : "🔮 Get Insights"}
               </button>
               <button
                 onClick={handleRecommendations}
                 disabled={recsLoading}
-                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+                className="flex-1 bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
               >
                 {recsLoading ? "Analyzing..." : "💡 Recommendations"}
               </button>
               <button
-                onClick={handleDataQuality}
-                disabled={qualityLoading}
-                className="bg-[#3fb950]/20 border border-[#3fb950]/30 text-[#3fb950] py-2 rounded-xl text-sm hover:bg-[#3fb950]/30 transition-all disabled:opacity-50"
-              >
-                {qualityLoading ? "Analyzing..." : "🧹 Data Quality"}
-              </button>
-              <button
-                onClick={handlePDFReport}
-                disabled={pdfLoading}
-                className="bg-[#ffa657]/20 border border-[#ffa657]/30 text-[#ffa657] py-2 rounded-xl text-sm hover:bg-[#ffa657]/30 transition-all disabled:opacity-50"
-              >
-                {pdfLoading ? "Generating..." : "📄 PDF Report"}
-              </button>
-              <button
-                onClick={handleRootCause}
-                disabled={rootCauseLoading}
-                className="bg-[#3fb950]/20 border border-[#3fb950]/30 text-[#3fb950] py-2 rounded-xl text-sm hover:bg-[#3fb950]/30 transition-all disabled:opacity-50"
-              >
-                {rootCauseLoading ? "Analyzing..." : "🔍 Root Cause"}
-              </button>
-              <button
                 onClick={handleSQL}
                 disabled={sqlLoading}
-                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+                className="flex-1 bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
               >
                 {sqlLoading ? "Generating..." : "🔷 SQL Query"}
-              </button>
-              <button
-                onClick={() => setShowAutoDashboard(!showAutoDashboard)}
-                className="col-span-2 bg-[#f0883e]/20 border border-[#f0883e]/30 text-[#f0883e] py-2 rounded-xl text-sm hover:bg-[#f0883e]/30 transition-all"
-              >
-                {showAutoDashboard ? "▲ Hide Auto Dashboard" : "📊 Generate Auto Dashboard"}
               </button>
             </div>
           </div>
 
-          {showAutoDashboard && result.summary?.column_info && (
-            <div className="bg-[var(--bg-panel-solid)] border border-[#f0883e]/30 rounded-2xl p-6">
-              <p className="text-[#f0883e] font-semibold mb-4">📊 Auto Dashboard</p>
-              <AutoDashboardCharts columnInfo={result.summary.column_info} />
-            </div>
-          )}
-
           {result.summary && (
-            <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-[var(--text-hi)] font-semibold">🔮 AI Data Summary</p>
+                <p className="text-[var(--text-primary)] font-semibold">🔮 AI Data Summary</p>
                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${
                   result.summary.quality_score === 100
                     ? "bg-green-500/20 text-green-400"
@@ -582,25 +573,30 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               </div>
               <div className="space-y-2 mb-4">
                 {result.summary.insights?.map((insight, i) => (
-                  <p key={i} className="text-[var(--text-mid)] text-sm bg-[var(--bg-void)] rounded-xl px-3 py-2">{insight}</p>
+                  <p key={i} className="text-[var(--text-secondary)] text-sm bg-[var(--bg-panel-alt)] rounded-xl px-3 py-2">
+                    {insight}
+                  </p>
                 ))}
               </div>
-              <p className="text-[var(--text-low)] text-xs mb-3">Column Analysis:</p>
+
+              <p className="text-[var(--text-tertiary)] text-xs mb-3">Column Analysis:</p>
               <div className="space-y-2">
                 {Object.entries(result.summary.column_info || {}).map(([col, info]) => (
-                  <div key={col} className="bg-[var(--bg-void)] rounded-xl p-3">
+                  <div key={col} className="bg-[var(--bg-panel-alt)] rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-[var(--text-hi)] text-xs font-medium">{col}</p>
-                      <span className="text-[var(--text-low)] text-xs">{info.type}</span>
+                      <p className="text-[var(--text-primary)] text-xs font-medium">{col}</p>
+                      <span className="text-[var(--text-tertiary)] text-xs">{info.type}</span>
                     </div>
                     {info.min !== undefined ? (
-                      <p className="text-[var(--text-mid)] text-xs">
+                      <p className="text-[var(--text-secondary)] text-xs">
                         Min: <span className="text-[#f78166]">{info.min}</span> •
                         Max: <span className="text-[#f78166]">{info.max}</span> •
                         Avg: <span className="text-[#f78166]">{info.mean}</span>
                       </p>
                     ) : (
-                      <p className="text-[var(--text-mid)] text-xs">Top: {Object.keys(info.top_values || {}).join(", ")}</p>
+                      <p className="text-[var(--text-secondary)] text-xs">
+                        Top: {Object.keys(info.top_values || {}).join(", ")}
+                      </p>
                     )}
                   </div>
                 ))}
@@ -609,98 +605,49 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
           )}
 
           {insights && (
-            <div className="bg-[var(--bg-panel-solid)] border border-[#bc8cff]/30 rounded-2xl p-6">
+            <div className="bg-[var(--bg-panel)] border border-[#bc8cff]/30 rounded-2xl p-6">
               <p className="text-[#bc8cff] font-semibold mb-4">🔮 Executive Business Insights</p>
-              <div className="text-[var(--text-mid)] text-sm leading-relaxed whitespace-pre-wrap">{insights.executive_summary}</div>
+              <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
+                {insights.executive_summary}
+              </div>
             </div>
           )}
 
           {recommendations && (
-            <div className="bg-[var(--bg-panel-solid)] border border-[#58a6ff]/30 rounded-2xl p-6">
+            <div className="bg-[var(--bg-panel)] border border-[#58a6ff]/30 rounded-2xl p-6">
               <p className="text-[#58a6ff] font-semibold mb-4">💡 AI Business Recommendations</p>
-              <div className="text-[var(--text-mid)] text-sm leading-relaxed whitespace-pre-wrap">{recommendations.recommendations}</div>
-            </div>
-          )}
-
-          {dataQuality && (
-            <div className="bg-[var(--bg-panel-solid)] border border-[#3fb950]/30 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[#3fb950] font-semibold">🧹 AI Data Quality Report</p>
-                <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                  dataQuality.quality_score >= 90
-                    ? "bg-green-500/20 text-green-400"
-                    : dataQuality.quality_score >= 70
-                    ? "bg-yellow-500/20 text-yellow-400"
-                    : "bg-red-500/20 text-red-400"
-                }`}>
-                  Score: {dataQuality.quality_score}%
-                </span>
-              </div>
-
-              <div className="space-y-2 mb-4">
-                {dataQuality.issues?.map((issue, i) => (
-                  <p key={i} className="text-[var(--text-mid)] text-xs bg-[var(--bg-void)] rounded-xl px-3 py-2">{issue}</p>
-                ))}
-              </div>
-
-              <p className="text-[var(--text-low)] text-xs mb-2">Suggestions:</p>
-              <div className="space-y-2 mb-4">
-                {dataQuality.suggestions?.map((s, i) => (
-                  <p key={i} className="text-[var(--text-mid)] text-xs bg-[var(--bg-void)] rounded-xl px-3 py-2">{s}</p>
-                ))}
-              </div>
-
-              <div className="bg-[var(--bg-void)] rounded-xl p-3">
-                <p className="text-[#3fb950] text-xs font-medium mb-1">🤖 AI Assessment:</p>
-                <p className="text-[var(--text-mid)] text-xs leading-relaxed whitespace-pre-wrap">{dataQuality.ai_summary}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Root Cause Analysis */}
-          {rootCause && (
-            <div className="bg-[var(--bg-panel-solid)] border border-[#3fb950]/30 rounded-2xl p-6">
-              <p className="text-[#3fb950] font-semibold mb-4">🔍 Root Cause Analysis</p>
-              {rootCause.findings?.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-[var(--text-low)] text-xs mb-2">Key Findings:</p>
-                  <div className="space-y-1">
-                    {rootCause.findings.map((f, i) => (
-                      <p key={i} className="text-[var(--text-mid)] text-xs bg-[var(--bg-void)] rounded-xl px-3 py-2">{f}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="bg-[var(--bg-void)] rounded-xl p-4">
-                <p className="text-[#3fb950] text-xs font-medium mb-2">🤖 AI Root Cause Analysis:</p>
-                <p className="text-[var(--text-mid)] text-xs leading-relaxed whitespace-pre-wrap">
-                  {rootCause.ai_root_cause_analysis}
-                </p>
+              <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
+                {recommendations.recommendations}
               </div>
             </div>
           )}
 
           {/* SQL Generator */}
-          <div className="bg-[var(--bg-panel-solid)] border border-[#58a6ff]/30 rounded-2xl p-6">
+          <div className="bg-[#161b22] border border-[#58a6ff]/30 rounded-2xl p-4">
             <p className="text-[#58a6ff] font-semibold mb-3">🔷 AI SQL Generator</p>
-            <input
-              type="text"
-              value={sqlQuestion}
-              onChange={(e) => setSqlQuestion(e.target.value)}
-              placeholder="Ask a question to generate SQL..."
-              className="w-full bg-[var(--bg-void)] border border-[var(--glass-border)] rounded-xl px-3 py-2 text-[var(--text-hi)] text-xs focus:outline-none focus:border-[#58a6ff] mb-3"
-            />
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={sqlQuestion}
+                onChange={(e) => setSqlQuestion(e.target.value)}
+                placeholder="Ask a question to generate SQL..."
+                className="flex-1 bg-[#0d0d0d] border border-[#30363d] rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-[#58a6ff] transition-all"
+              />
+              <button
+                onClick={handleSQL}
+                disabled={sqlLoading}
+                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] px-4 py-2 rounded-xl text-xs hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+              >
+                {sqlLoading ? "..." : "Generate"}
+              </button>
+            </div>
             {sqlResult && (
-              <div className="bg-[var(--bg-void)] rounded-xl p-3">
-                <p className="text-[var(--text-mid)] text-xs leading-relaxed whitespace-pre-wrap">
-                  {sqlResult.ai_response}
-                </p>
+              <div className="bg-[#0d0d0d] rounded-xl p-3">
+                <p className="text-gray-300 text-xs leading-relaxed whitespace-pre-wrap">{sqlResult.ai_response}</p>
                 {sqlResult.executed_result && (
-                  <div className="mt-3 pt-3 border-t border-[var(--glass-border)]">
+                  <div className="mt-3 pt-3 border-t border-[#30363d]">
                     <p className="text-[#58a6ff] text-xs font-medium mb-1">⚡ Executed Result:</p>
-                    <p className="text-[var(--text-mid)] text-xs whitespace-pre-wrap">
-                      {JSON.stringify(sqlResult.executed_result, null, 2)}
-                    </p>
+                    <p className="text-gray-300 text-xs font-mono whitespace-pre">{JSON.stringify(sqlResult.executed_result, null, 2)}</p>
                   </div>
                 )}
               </div>
@@ -714,6 +661,7 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
 
 // ── Forecast Tool ────────────────────────────────────────
 function ForecastTool({ headers }) {
+  const { showToast } = useToast();
   const [file, setFile] = useState(null);
   const [dateCol, setDateCol] = useState("date");
   const [valueCol, setValueCol] = useState("sales");
@@ -721,7 +669,6 @@ function ForecastTool({ headers }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { showToast } = useToast();
 
   const handleForecast = async () => {
     if (!file) return;
@@ -735,71 +682,94 @@ function ForecastTool({ headers }) {
     try {
       const res = await axios.post(`${API}/forecast`, formData, { headers });
       setResult(res.data);
-      showToast(`📈 Forecast completed!`, "success");
+      showToast("Forecast completed!", "success");
     } catch (e) {
-      setError(e.response?.data?.detail || "Forecast failed");
-      showToast("❌ Forecast failed.", "error");
+      const msg = e.response?.data?.detail || "Forecast failed";
+      setError(msg);
+      showToast(msg, "error");
     }
     setLoading(false);
   };
 
   return (
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-hi)] mb-2">📈 Forecasting</h2>
-      <p className="text-[var(--text-mid)] mb-6">Predict future values from your time-series data</p>
+      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📈 Forecasting</h2>
+      <p className="text-[var(--text-secondary)] mb-6">Predict future values from your time-series data</p>
+
       <div className="space-y-4 mb-6">
         <div>
-          <label className="text-[var(--text-mid)] text-sm mb-2 block">Upload File</label>
-          <input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files[0])}
-            className="w-full bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-xl px-4 py-3 text-[var(--text-mid)] text-sm" />
+          <label className="text-[var(--text-secondary)] text-sm mb-2 block">Upload File</label>
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={(e) => setFile(e.target.files[0])}
+            className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-sm"
+          />
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="text-[var(--text-mid)] text-xs mb-1 block">Date Column</label>
-            <input value={dateCol} onChange={(e) => setDateCol(e.target.value)}
-              className="w-full bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-xl px-3 py-2 text-[var(--text-hi)] text-sm focus:outline-none focus:border-[#f78166]" />
+            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Date Column</label>
+            <input
+              value={dateCol}
+              onChange={(e) => setDateCol(e.target.value)}
+              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
+            />
           </div>
           <div>
-            <label className="text-[var(--text-mid)] text-xs mb-1 block">Value Column</label>
-            <input value={valueCol} onChange={(e) => setValueCol(e.target.value)}
-              className="w-full bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-xl px-3 py-2 text-[var(--text-hi)] text-sm focus:outline-none focus:border-[#f78166]" />
+            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Value Column</label>
+            <input
+              value={valueCol}
+              onChange={(e) => setValueCol(e.target.value)}
+              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
+            />
           </div>
           <div>
-            <label className="text-[var(--text-mid)] text-xs mb-1 block">Periods</label>
-            <input type="number" value={periods} onChange={(e) => setPeriods(e.target.value)}
-              className="w-full bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-xl px-3 py-2 text-[var(--text-hi)] text-sm focus:outline-none focus:border-[#f78166]" />
+            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Periods</label>
+            <input
+              type="number"
+              value={periods}
+              onChange={(e) => setPeriods(e.target.value)}
+              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
+            />
           </div>
         </div>
       </div>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
       <button onClick={handleForecast} disabled={!file || loading}
-        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-[var(--text-hi)] font-semibold py-3 rounded-xl transition-all mb-6">
+        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all mb-6">
         {loading ? "Running Forecast..." : "Run Forecast 📈"}
       </button>
       {result && (
-        <div className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-6">
-          <p className="text-green-400 font-medium mb-4">✅ Forecast completed! {result.periods_forecasted} periods predicted.</p>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
+          <p className="text-green-400 font-medium mb-4">
+            ✅ Forecast completed! {result.periods_forecasted} periods predicted.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-[var(--glass-border)]">
-                  <th className="text-[var(--text-low)] text-left py-2">Date</th>
-                  <th className="text-[var(--text-low)] text-left py-2">Predicted</th>
-                  <th className="text-[var(--text-low)] text-left py-2">Lower</th>
-                  <th className="text-[var(--text-low)] text-left py-2">Upper</th>
+                <tr className="border-b border-[var(--border-color)]">
+                  <th className="text-[var(--text-tertiary)] text-left py-2">Date</th>
+                  <th className="text-[var(--text-tertiary)] text-left py-2">Predicted</th>
+                  <th className="text-[var(--text-tertiary)] text-left py-2">Lower</th>
+                  <th className="text-[var(--text-tertiary)] text-left py-2">Upper</th>
                 </tr>
               </thead>
               <tbody>
                 {result.forecast?.slice(0, 10).map((row, i) => (
-                  <tr key={i} className="border-b border-[var(--glass-border)]/50">
-                    <td className="text-[var(--text-mid)] py-2">{row.ds}</td>
+                  <tr key={i} className="border-b border-[var(--border-color)]/50">
+                    <td className="text-[var(--text-secondary)] py-2">{row.ds}</td>
                     <td className="text-[#f78166] py-2">{Math.round(row.yhat).toLocaleString()}</td>
-                    <td className="text-[var(--text-low)] py-2">{Math.round(row.yhat_lower).toLocaleString()}</td>
-                    <td className="text-[var(--text-low)] py-2">{Math.round(row.yhat_upper).toLocaleString()}</td>
+                    <td className="text-[var(--text-tertiary)] py-2">{Math.round(row.yhat_lower).toLocaleString()}</td>
+                    <td className="text-[var(--text-tertiary)] py-2">{Math.round(row.yhat_upper).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {result.forecast?.length > 10 && (
+              <p className="text-[var(--text-tertiary)] text-xs mt-2">
+                Showing 10 of {result.forecast.length} predictions
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -820,7 +790,7 @@ function FilesTool({ headers, setFileId, setActiveTool }) {
       setLoaded(true);
     } catch {
       setLoaded(true);
-      showToast("❌ Failed to load files.", "error");
+      showToast("Failed to load files.", "error");
     }
   };
 
@@ -828,29 +798,30 @@ function FilesTool({ headers, setFileId, setActiveTool }) {
 
   return (
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-hi)] mb-2">🗂️ My Files</h2>
-      <p className="text-[var(--text-mid)] mb-6">All files you have uploaded</p>
+      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">🗂️ My Files</h2>
+      <p className="text-[var(--text-secondary)] mb-6">All files you have uploaded</p>
+
       {files.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-5xl mb-4 animate-bounce">📂</p>
-          <p className="text-[var(--text-mid)]">No files uploaded yet</p>
+          <p className="text-[var(--text-secondary)]">No files uploaded yet</p>
         </div>
       ) : (
         <div className="space-y-3">
           {files.map((f, i) => (
-            <div key={i} className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+            <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[var(--text-hi)] font-medium text-sm">📄 {f.filename}</p>
+                <p className="text-[var(--text-primary)] font-medium text-sm">📄 {f.filename}</p>
                 <button
-                  onClick={() => { setFileId(f._id); setActiveTool("chat"); showToast(`💬 Chatting with ${f.filename}`, "info"); }}
+                  onClick={() => { setFileId(f._id); setActiveTool("chat"); showToast(`Chatting with ${f.filename}`, "info"); }}
                   className="text-[#f78166] text-xs hover:underline"
                 >Chat with this →</button>
               </div>
-              <div className="flex gap-4 text-xs text-[var(--text-low)]">
+              <div className="flex gap-4 text-xs text-[var(--text-tertiary)]">
                 <span>📊 {f.rows} rows</span>
                 <span>🗂️ {f.columns?.join(", ")}</span>
               </div>
-              <p className="text-[var(--text-low)] font-mono text-xs mt-2 truncate">ID: {f._id}</p>
+              <p className="text-[var(--text-quaternary)] font-mono text-xs mt-2 truncate">ID: {f._id}</p>
             </div>
           ))}
         </div>
@@ -878,21 +849,126 @@ function HistoryTool({ headers }) {
 
   return (
     <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-hi)] mb-2">📜 Query History</h2>
-      <p className="text-[var(--text-mid)] mb-6">Your past questions and answers</p>
+      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📜 Query History</h2>
+      <p className="text-[var(--text-secondary)] mb-6">Your past questions and answers</p>
+
       {history.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-5xl mb-4 animate-bounce">📜</p>
-          <p className="text-[var(--text-mid)]">No queries yet</p>
+          <p className="text-[var(--text-secondary)]">No queries yet</p>
         </div>
       ) : (
         <div className="space-y-3">
           {history.map((h, i) => (
-            <div key={i} className="bg-[var(--bg-panel-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+            <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-4">
               <p className="text-[#f78166] text-sm font-medium mb-2">❓ {h.question}</p>
-              <p className="text-[var(--text-mid)] text-xs leading-relaxed line-clamp-3">{h.answer}</p>
+              <p className="text-[var(--text-secondary)] text-xs leading-relaxed line-clamp-3">{h.answer}</p>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Consultant Tool ───────────────────────────────────────
+function ConsultantTool({ headers }) {
+  const { showToast } = useToast();
+  const [file, setFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [consultant, setConsultant] = useState(null);
+  const [consultantLoading, setConsultantLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) {
+      setFile(dropped);
+      setConsultant(null);
+      showToast(`"${dropped.name}" ready to analyze`, "info");
+    }
+  };
+
+  const handleConsultant = async () => {
+    if (!file) return;
+    setConsultantLoading(true);
+    setError("");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/business-consultant`, formData, { headers });
+      setConsultant(res.data);
+      showToast("👔 Business consultation complete!", "success");
+    } catch (e) {
+      const msg = e.response?.data?.detail || "Business consultation failed";
+      setError(msg);
+      showToast(msg, "error");
+    }
+    setConsultantLoading(false);
+  };
+
+  return (
+    <div className="flex-1 p-8 max-w-2xl mx-auto w-full overflow-y-auto">
+      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">👔 AI Business Consultant</h2>
+      <p className="text-[var(--text-secondary)] mb-4">
+        Upload your data and get expert-level business advice, risks, and strategic recommendations
+      </p>
+
+      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2 mb-6">
+        <span>🔒</span>
+        <p className="text-green-400 text-xs">Your data is encrypted and private — we never share or sell your files</p>
+      </div>
+
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
+          dragActive ? "border-[#ffa657] bg-[#ffa657]/5 scale-[1.01]" : "border-[var(--border-color)] hover:border-[#ffa657]/50"
+        }`}
+      >
+        <div className="text-5xl mb-4">{dragActive ? "📥" : "👔"}</div>
+        <p className="text-[var(--text-secondary)] mb-4">
+          {dragActive ? "Drop it right here!" : "Drop your file here or click to browse"}
+        </p>
+        <input
+          type="file"
+          accept=".csv,.xlsx"
+          onChange={(e) => {
+            setFile(e.target.files[0]);
+            setConsultant(null);
+            showToast(`"${e.target.files[0].name}" selected`, "info");
+          }}
+          className="hidden"
+          id="consultantFileInput"
+        />
+        <label
+          htmlFor="consultantFileInput"
+          className="bg-[var(--bg-panel-alt)] border border-[var(--border-color)] text-[var(--text-secondary)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#ffa657]/50 transition-all text-sm"
+        >
+          Choose File
+        </label>
+        {file && <p className="text-[#ffa657] mt-3 text-sm">✅ {file.name}</p>}
+      </div>
+
+      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+
+      <button
+        onClick={handleConsultant}
+        disabled={!file || consultantLoading}
+        className="w-full bg-[#ffa657] hover:bg-[#e6944e] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
+      >
+        {consultantLoading ? "Consulting..." : "Get Business Consultation 👔"}
+      </button>
+
+      {consultant && (
+        <div className="mt-6 bg-[var(--bg-panel)] border border-[#ffa657]/30 rounded-2xl p-6">
+          <p className="text-[#ffa657] font-semibold mb-4">👔 AI Business Consultation</p>
+          <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
+            {consultant.consultation}
+          </div>
         </div>
       )}
     </div>

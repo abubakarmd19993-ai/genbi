@@ -298,8 +298,13 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [dataQuality, setDataQuality] = useState(null);
   const [qualityLoading, setQualityLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [rootCause, setRootCause] = useState(null);
+  const [rootCauseLoading, setRootCauseLoading] = useState(false);
   const [showAutoDashboard, setShowAutoDashboard] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [sqlResult, setSqlResult] = useState(null);
+  const [sqlLoading, setSqlLoading] = useState(false);
+  const [sqlQuestion, setSqlQuestion] = useState("What is the total sales by category?");
   const { showToast } = useToast();
 
   const handleUpload = async () => {
@@ -387,6 +392,37 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
       showToast("❌ PDF generation failed.", "error");
     }
     setPdfLoading(false);
+  };
+
+  const handleRootCause = async () => {
+    if (!file) return;
+    setRootCauseLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/root-cause`, formData, { headers });
+      setRootCause(res.data);
+      showToast("🔍 Root cause analysis complete!", "success");
+    } catch (e) {
+      showToast("❌ Root cause analysis failed.", "error");
+    }
+    setRootCauseLoading(false);
+  };
+
+  const handleSQL = async () => {
+    if (!file) return;
+    setSqlLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("question", sqlQuestion);
+    try {
+      const res = await axios.post(`${API}/generate-sql`, formData, { headers });
+      setSqlResult(res.data);
+      showToast("🔷 SQL generated successfully!", "success");
+    } catch (e) {
+      showToast("❌ SQL generation failed.", "error");
+    }
+    setSqlLoading(false);
   };
 
   const handleDrop = (e) => {
@@ -496,13 +532,27 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               <button
                 onClick={handlePDFReport}
                 disabled={pdfLoading}
-                className="flex-1 bg-[#ffa657]/20 border border-[#ffa657]/30 text-[#ffa657] py-2 rounded-xl text-sm hover:bg-[#ffa657]/30 transition-all disabled:opacity-50"
+                className="bg-[#ffa657]/20 border border-[#ffa657]/30 text-[#ffa657] py-2 rounded-xl text-sm hover:bg-[#ffa657]/30 transition-all disabled:opacity-50"
               >
                 {pdfLoading ? "Generating..." : "📄 PDF Report"}
               </button>
               <button
+                onClick={handleRootCause}
+                disabled={rootCauseLoading}
+                className="bg-[#3fb950]/20 border border-[#3fb950]/30 text-[#3fb950] py-2 rounded-xl text-sm hover:bg-[#3fb950]/30 transition-all disabled:opacity-50"
+              >
+                {rootCauseLoading ? "Analyzing..." : "🔍 Root Cause"}
+              </button>
+              <button
+                onClick={handleSQL}
+                disabled={sqlLoading}
+                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
+              >
+                {sqlLoading ? "Generating..." : "🔷 SQL Query"}
+              </button>
+              <button
                 onClick={() => setShowAutoDashboard(!showAutoDashboard)}
-                className="bg-[#f0883e]/20 border border-[#f0883e]/30 text-[#f0883e] py-2 rounded-xl text-sm hover:bg-[#f0883e]/30 transition-all"
+                className="col-span-2 bg-[#f0883e]/20 border border-[#f0883e]/30 text-[#f0883e] py-2 rounded-xl text-sm hover:bg-[#f0883e]/30 transition-all"
               >
                 {showAutoDashboard ? "▲ Hide Auto Dashboard" : "📊 Generate Auto Dashboard"}
               </button>
@@ -606,6 +656,56 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
               </div>
             </div>
           )}
+
+          {/* Root Cause Analysis */}
+          {rootCause && (
+            <div className="bg-[var(--bg-panel-solid)] border border-[#3fb950]/30 rounded-2xl p-6">
+              <p className="text-[#3fb950] font-semibold mb-4">🔍 Root Cause Analysis</p>
+              {rootCause.findings?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[var(--text-low)] text-xs mb-2">Key Findings:</p>
+                  <div className="space-y-1">
+                    {rootCause.findings.map((f, i) => (
+                      <p key={i} className="text-[var(--text-mid)] text-xs bg-[var(--bg-void)] rounded-xl px-3 py-2">{f}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="bg-[var(--bg-void)] rounded-xl p-4">
+                <p className="text-[#3fb950] text-xs font-medium mb-2">🤖 AI Root Cause Analysis:</p>
+                <p className="text-[var(--text-mid)] text-xs leading-relaxed whitespace-pre-wrap">
+                  {rootCause.ai_root_cause_analysis}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* SQL Generator */}
+          <div className="bg-[var(--bg-panel-solid)] border border-[#58a6ff]/30 rounded-2xl p-6">
+            <p className="text-[#58a6ff] font-semibold mb-3">🔷 AI SQL Generator</p>
+            <input
+              type="text"
+              value={sqlQuestion}
+              onChange={(e) => setSqlQuestion(e.target.value)}
+              placeholder="Ask a question to generate SQL..."
+              className="w-full bg-[var(--bg-void)] border border-[var(--glass-border)] rounded-xl px-3 py-2 text-[var(--text-hi)] text-xs focus:outline-none focus:border-[#58a6ff] mb-3"
+            />
+            {sqlResult && (
+              <div className="bg-[var(--bg-void)] rounded-xl p-3">
+                <p className="text-[var(--text-mid)] text-xs leading-relaxed whitespace-pre-wrap">
+                  {sqlResult.ai_response}
+                </p>
+                {sqlResult.executed_result && (
+                  <div className="mt-3 pt-3 border-t border-[var(--glass-border)]">
+                    <p className="text-[#58a6ff] text-xs font-medium mb-1">⚡ Executed Result:</p>
+                    <p className="text-[var(--text-mid)] text-xs whitespace-pre-wrap">
+                      {JSON.stringify(sqlResult.executed_result, null, 2)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

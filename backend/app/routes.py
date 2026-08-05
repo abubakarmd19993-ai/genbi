@@ -1,3 +1,4 @@
+from backend.app.pdf_chat import ingest_pdf, query_pdf, get_pdf_summary
 from backend.app.youtube_notes import generate_youtube_notes
 from backend.app.industry_intelligence import generate_industry_intelligence
 from backend.app.business_consultant import business_consultant_analysis
@@ -232,6 +233,68 @@ async def youtube_notes(
             "Content-Disposition": "attachment; filename=GenBI_StudyNotes.pdf"
         }
     )
+@router.post("/upload-pdf")
+async def upload_pdf(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files allowed")
+    contents = await file.read()
+    try:
+        # Save file metadata
+        file_meta = {
+            "filename": file.filename,
+            "type": "pdf",
+            "uploaded_by": current_user
+        }
+        result = await db.files.insert_one(file_meta)
+        file_id = str(result.inserted_id)
+
+        # Get summary
+        summary = get_pdf_summary(contents, file.filename)
+
+        # Ingest into ChromaDB
+        chunks = ingest_pdf(contents, file.filename, file_id)
+
+        return {
+            "message": "PDF uploaded and indexed successfully",
+            "filename": file.filename,
+            "file_id": file_id,
+            "chunks_indexed": chunks,
+            "summary": summary
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class PDFQueryRequest(BaseModel):
+    question: str
+    file_id: str
+
+
+@router.post("/query-pdf")
+async def query_pdf_endpoint(
+    request: PDFQueryRequest,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        result = query_pdf(request.question, request.file_id)
+        # Save to history
+        await db.query_history.insert_one({
+            "question": request.question,
+            "answer": result["answer"],
+            "file_id": request.file_id,
+            "type": "pdf",
+            "asked_by": current_user
+        })
+        return {
+            "message": "PDF query completed",
+            **result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.post("/dashboard")
 async def create_dashboard(
     file: UploadFile = File(...),

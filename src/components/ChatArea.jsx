@@ -516,6 +516,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   if (activeTool === "history") return <HistoryTool headers={headers} />;
   if (activeTool === "autodashboard") return <ChartDashboard headers={headers} />;
   if (activeTool === "youtube") return <YouTubeTool headers={headers} />;
+  if (activeTool === "pdfchat") return <PDFChatTool />;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", overflow: "hidden" }}>
@@ -1433,6 +1434,260 @@ function YouTubeTool({ headers }) {
           ))}
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+// ── PDF Chat Tool ────────────────────────────────────────
+function PDFChatTool() {
+  const { token } = useAuth();
+  const headers = { Authorization: `Bearer ${token}` };
+  const [file, setFile] = useState(null);
+  const [fileId, setFileId] = useState("");
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const { showToast } = useToast();
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/upload-pdf`, formData, { headers });
+      setFileId(res.data.file_id);
+      setSummary(res.data.summary);
+      showToast("📄 PDF uploaded and indexed!", "success");
+    } catch (e) {
+      showToast("❌ PDF upload failed.", "error");
+    }
+    setLoading(false);
+  };
+
+  const handleAsk = async () => {
+    if (!question.trim() || !fileId) return;
+    const userMsg = { role: "user", content: question };
+    setMessages(prev => [...prev, userMsg]);
+    setQuestion("");
+    setAsking(true);
+    try {
+      const res = await axios.post(`${API}/query-pdf`,
+        { question: userMsg.content, file_id: fileId },
+        { headers }
+      );
+      setMessages(prev => [...prev, { role: "assistant", content: res.data.answer }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, could not query the PDF." }]);
+    }
+    setAsking(false);
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)" }}>
+      {/* Header */}
+      <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <h2 style={{ color: "#FFFFFF", fontSize: 20, fontWeight: 700, margin: "0 0 4px 0" }}>📄 PDF Chat</h2>
+        <p style={{ color: "#6B7280", fontSize: 13, margin: 0 }}>Upload any PDF and ask questions about it</p>
+      </div>
+
+      {!fileId ? (
+        /* Upload Section */
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ width: "100%", maxWidth: 500 }}>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                border: "2px dashed rgba(59,130,246,0.3)",
+                borderRadius: 18, padding: "40px 24px",
+                textAlign: "center",
+                background: "rgba(59,130,246,0.04)",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
+              <p style={{ color: "#E5E7EB", fontSize: 16, fontWeight: 600, margin: "0 0 6px 0" }}>
+                Upload your PDF
+              </p>
+              <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px 0" }}>
+                Research papers, reports, manuals, books — any PDF!
+              </p>
+              <input type="file" accept=".pdf"
+                onChange={e => setFile(e.target.files[0])}
+                className="hidden" id="pdfInput" />
+              <label htmlFor="pdfInput" style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 10, padding: "8px 20px",
+                cursor: "pointer", color: "#9CA3AF", fontSize: 13,
+              }}>
+                Choose PDF
+              </label>
+              {file && <p style={{ color: "#3B82F6", marginTop: 12, fontSize: 13 }}>✅ {file.name}</p>}
+            </motion.div>
+
+            <motion.button
+              onClick={handleUpload}
+              disabled={!file || loading}
+              whileHover={file && !loading ? { y: -2 } : {}}
+              whileTap={{ scale: 0.98 }}
+              style={{
+                width: "100%", padding: "13px", borderRadius: 14,
+                background: "linear-gradient(135deg, #1e3a5f, #3B82F6)",
+                border: "1px solid rgba(125,211,252,0.25)",
+                color: "white", fontSize: 14, fontWeight: 600,
+                cursor: file && !loading ? "pointer" : "not-allowed",
+                opacity: !file || loading ? 0.5 : 1,
+                boxShadow: "0 4px 20px rgba(59,130,246,0.25)",
+              }}
+            >
+              {loading ? "Uploading & Indexing..." : "Upload & Start Chatting 🚀"}
+            </motion.button>
+          </div>
+        </div>
+      ) : (
+        /* Chat Section */
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Summary */}
+          {summary && (
+            <div style={{
+              margin: "12px 20px", padding: "12px 16px", borderRadius: 14,
+              background: "rgba(59,130,246,0.06)",
+              border: "1px solid rgba(59,130,246,0.15)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <p style={{ color: "#60A5FA", fontWeight: 600, fontSize: 13, margin: 0 }}>
+                  📄 {summary.filename}
+                </p>
+                <span style={{ color: "#6B7280", fontSize: 11 }}>
+                  {summary.pages} pages · {summary.words} words
+                </span>
+              </div>
+              <p style={{ color: "#9CA3AF", fontSize: 12, margin: 0, lineHeight: 1.5,
+                overflow: "hidden", display: "-webkit-box",
+                WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                {summary.summary?.split("\n")[0]}
+              </p>
+            </div>
+          )}
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 16px" }}>
+            {messages.length === 0 && (
+              <div style={{ textAlign: "center", padding: "40px 0" }}>
+                <p style={{ color: "#6B7280", fontSize: 14 }}>
+                  PDF indexed! Ask anything about it below 👇
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
+                  {[
+                    "Summarize this document",
+                    "What are the key findings?",
+                    "List the main recommendations",
+                    "What is the total revenue?",
+                  ].map((q, i) => (
+                    <button key={i} onClick={() => setQuestion(q)}
+                      style={{
+                        padding: "6px 14px", borderRadius: 20, fontSize: 12,
+                        background: "rgba(59,130,246,0.08)",
+                        border: "1px solid rgba(59,130,246,0.2)",
+                        color: "#60A5FA", cursor: "pointer",
+                      }}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <AnimatePresence>
+              {messages.map((msg, i) => (
+                <motion.div key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 12 }}
+                >
+                  <div style={{
+                    maxWidth: "75%", padding: "10px 14px", borderRadius: 16,
+                    background: msg.role === "user"
+                      ? "linear-gradient(135deg, #1e3a5f, #3B82F6)"
+                      : "rgba(255,255,255,0.04)",
+                    border: msg.role === "user"
+                      ? "1px solid rgba(125,211,252,0.3)"
+                      : "1px solid rgba(255,255,255,0.07)",
+                  }}>
+                    {msg.role === "assistant" && (
+                      <p style={{ color: "#3B82F6", fontSize: 11, fontWeight: 600, margin: "0 0 6px 0" }}>
+                        🔮 GenBI PDF
+                      </p>
+                    )}
+                    <p style={{ color: "#E5E7EB", fontSize: 13, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                      {msg.content}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {asking && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#3B82F6", animation: "pulse 1s infinite" }} />
+                <span style={{ color: "#6B7280", fontSize: 12 }}>Searching PDF...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div style={{
+            padding: "12px 20px 16px",
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+            background: "rgba(15,23,42,0.6)",
+          }}>
+            <div style={{
+              display: "flex", gap: 10, alignItems: "center",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(59,130,246,0.2)",
+              borderRadius: 14, padding: "8px 8px 8px 16px",
+            }}>
+              <input
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAsk()}
+                placeholder="Ask anything about your PDF..."
+                style={{
+                  flex: 1, background: "transparent", border: "none",
+                  outline: "none", color: "#E5E7EB", fontSize: 14,
+                  fontFamily: "Inter, sans-serif",
+                }}
+              />
+              <motion.button
+                onClick={handleAsk}
+                disabled={asking || !question.trim()}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: question.trim() ? "linear-gradient(135deg, #1e3a5f, #3B82F6)" : "rgba(255,255,255,0.05)",
+                  border: "none", cursor: question.trim() ? "pointer" : "not-allowed",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  opacity: asking ? 0.6 : 1,
+                }}
+              >
+                <Send size={14} color={question.trim() ? "white" : "#374151"} />
+              </motion.button>
+            </div>
+            <button
+              onClick={() => { setFileId(""); setSummary(null); setMessages([]); setFile(null); }}
+              style={{
+                background: "none", border: "none", color: "#4B5563",
+                fontSize: 11, cursor: "pointer", marginTop: 8,
+              }}
+            >
+              ← Upload a different PDF
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

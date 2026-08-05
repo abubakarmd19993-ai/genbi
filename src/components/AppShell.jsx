@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Upload, LayoutDashboard, TrendingUp, History,
   FolderOpen, Brain, BarChart3, Sparkles, Sun, Moon,
-  LogOut, ChevronLeft, ChevronRight, Zap, Search, Bell
+  LogOut, ChevronLeft, ChevronRight, Zap, Search, Bell, FileText
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { id: "youtube", icon: Brain, label: "YouTube Notes", desc: "YouTube → Study PDF", badge: "New" },
   { id: "autodashboard", icon: BarChart3, label: "Auto Dashboard", desc: "Generate dashboards instantly", badge: "New" },
   { id: "forecast", icon: TrendingUp, label: "Forecasting", desc: "Predict future trends", badge: "●" },
+  { id: "pdfchat", icon: FileText, label: "PDF Chat", desc: "Chat with any PDF", badge: "New" },
   { id: "history", icon: History, label: "History", desc: "View past queries", badge: null },
   { id: "files", icon: FolderOpen, label: "My Files", desc: "Manage uploaded files", badge: null },
   { id: "embed", icon: Brain, label: "Embedder", desc: "Convert files to embeddings", badge: null },

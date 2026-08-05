@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { id: "chat", icon: Bot, label: "AI Chat", desc: "Ask questions about your data", badge: null },
   { id: "upload", icon: Upload, label: "Upload Data", desc: "Import CSV or Excel files", badge: null },
   { id: "dashboard", icon: LayoutDashboard, label: "My Stats", desc: "View your activity", badge: null },
+  { id: "youtube", icon: Brain, label: "YouTube Notes", desc: "YouTube → Study PDF", badge: "New" },
   { id: "autodashboard", icon: BarChart3, label: "Auto Dashboard", desc: "Generate dashboards instantly", badge: "New" },
   { id: "forecast", icon: TrendingUp, label: "Forecasting", desc: "Predict future trends", badge: "●" },
   { id: "history", icon: History, label: "History", desc: "View past queries", badge: null },

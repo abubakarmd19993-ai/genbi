@@ -515,6 +515,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   if (activeTool === "files") return <FilesTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
   if (activeTool === "history") return <HistoryTool headers={headers} />;
   if (activeTool === "autodashboard") return <ChartDashboard headers={headers} />;
+  if (activeTool === "youtube") return <YouTubeTool headers={headers} />;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", overflow: "hidden" }}>
@@ -1235,6 +1236,203 @@ function HistoryTool({ headers }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── YouTube Notes Tool ───────────────────────────────────
+function YouTubeTool({ headers }) {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const { showToast } = useToast();
+
+  const handleGenerate = async () => {
+    if (!url.trim()) return;
+    setLoading(true); setError(""); setSuccess(false);
+    try {
+      const res = await axios.post(
+        `${API}/youtube-notes?video_url=${encodeURIComponent(url)}`,
+        {},
+        { headers, responseType: "blob" }
+      );
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.setAttribute("download", "GenBI_StudyNotes.pdf");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setSuccess(true);
+      showToast("🎥 Study notes PDF downloaded!", "success");
+    } catch (e) {
+      setError("Failed to generate notes. Make sure the video has captions enabled.");
+      showToast("❌ Failed to generate notes.", "error");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ flex: 1, padding: 24, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+        <h2 style={{ color: "#FFFFFF", fontSize: 22, fontWeight: 700, margin: "0 0 4px 0" }}>
+          🎥 YouTube → Study Notes
+        </h2>
+        <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 24px 0" }}>
+          Paste any YouTube lecture URL and get structured PDF notes with Q&A
+        </p>
+
+        {/* Features */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 8, marginBottom: 24,
+        }}>
+          {[
+            { icon: "📚", label: "Key Concepts", desc: "Auto-extracted" },
+            { icon: "❓", label: "15 Q&A", desc: "Important questions" },
+            { icon: "⚡", label: "Quick Notes", desc: "Revision ready" },
+          ].map((f, i) => (
+            <div key={i} style={{
+              background: "rgba(59,130,246,0.06)",
+              border: "1px solid rgba(59,130,246,0.15)",
+              borderRadius: 12, padding: "12px",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{f.icon}</div>
+              <p style={{ color: "#E5E7EB", fontSize: 12, fontWeight: 600, margin: "0 0 2px 0" }}>{f.label}</p>
+              <p style={{ color: "#6B7280", fontSize: 11, margin: 0 }}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* URL Input */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 }}>
+            YouTube URL
+          </label>
+          <div style={{
+            display: "flex", gap: 10, alignItems: "center",
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(59,130,246,0.2)",
+            borderRadius: 14, padding: "4px 4px 4px 14px",
+          }}>
+            <span style={{ fontSize: 18 }}>🎥</span>
+            <input
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleGenerate()}
+              placeholder="https://www.youtube.com/watch?v=..."
+              style={{
+                flex: 1, background: "transparent", border: "none",
+                outline: "none", color: "#E5E7EB", fontSize: 13,
+                fontFamily: "Inter, sans-serif",
+              }}
+            />
+            <motion.button
+              onClick={handleGenerate}
+              disabled={!url.trim() || loading}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              style={{
+                padding: "10px 20px", borderRadius: 10,
+                background: url.trim() ? "linear-gradient(135deg, #1e3a5f, #3B82F6)" : "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(125,211,252,0.2)",
+                color: "white", fontSize: 13, fontWeight: 600,
+                cursor: url.trim() && !loading ? "pointer" : "not-allowed",
+                opacity: loading ? 0.7 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {loading ? "Generating..." : "Generate PDF 📄"}
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            style={{
+              background: "rgba(59,130,246,0.06)",
+              border: "1px solid rgba(59,130,246,0.2)",
+              borderRadius: 14, padding: "20px",
+              textAlign: "center", marginBottom: 12,
+            }}
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+              style={{
+                width: 40, height: 40, borderRadius: "50%",
+                border: "3px solid rgba(59,130,246,0.2)",
+                borderTopColor: "#3B82F6",
+                margin: "0 auto 12px",
+              }}
+            />
+            <p style={{ color: "#60A5FA", fontWeight: 600, margin: "0 0 4px 0" }}>
+              Generating Study Notes...
+            </p>
+            <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>
+              Fetching transcript → AI analyzing → Creating PDF (30-60 seconds)
+            </p>
+          </motion.div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: "rgba(239,68,68,0.08)",
+            border: "1px solid rgba(239,68,68,0.2)",
+            borderRadius: 12, padding: "12px 16px", marginBottom: 12,
+          }}>
+            <p style={{ color: "#ef4444", fontSize: 13, margin: 0 }}>⚠️ {error}</p>
+          </div>
+        )}
+
+        {/* Success */}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{
+              background: "rgba(34,197,94,0.08)",
+              border: "1px solid rgba(34,197,94,0.2)",
+              borderRadius: 12, padding: "16px",
+              textAlign: "center", marginBottom: 12,
+            }}
+          >
+            <p style={{ color: "#22c55e", fontSize: 16, fontWeight: 700, margin: "0 0 4px 0" }}>
+              ✅ Study Notes Generated!
+            </p>
+            <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>
+              PDF downloaded to your computer. Check your Downloads folder!
+            </p>
+          </motion.div>
+        )}
+
+        {/* Tips */}
+        <div style={{
+          background: "rgba(255,255,255,0.02)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          borderRadius: 12, padding: "14px 16px",
+        }}>
+          <p style={{ color: "#9CA3AF", fontSize: 11, fontWeight: 600, margin: "0 0 8px 0" }}>
+            💡 TIPS FOR BEST RESULTS
+          </p>
+          {[
+            "Use videos with auto-generated or manual captions",
+            "Lecture videos, tutorials, and educational content work best",
+            "Videos 5-30 minutes give the most detailed notes",
+            "Works with most YouTube educational channels",
+          ].map((tip, i) => (
+            <p key={i} style={{ color: "#6B7280", fontSize: 11, margin: "0 0 4px 0" }}>
+              • {tip}
+            </p>
+          ))}
+        </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,367 +1,697 @@
-import IndustryLoader from "./IndustryLoader";
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Upload, MessageSquare, TrendingUp, Settings, FolderOpen,
+  History, Briefcase, Send, Paperclip, Mic, Sparkles,
+  Search, BarChart3, FileText, Zap, ArrowRight, Brain
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import AILoading from "./AILoading";
+import ChartDashboard from "./Dashboard";
+import IndustryLoader from "./IndustryLoader";
 import axios from "axios";
 
 const API = "http://127.0.0.1:8000";
 
-export default function ChatArea({ activeTool, setActiveTool, setChats, setActiveChat, standalone = false }) {
-  const { username, token } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [fileId, setFileId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [typingIndex, setTypingIndex] = useState(null);
-  const [listening, setListening] = useState(false);
-
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const quickActions = [
-    { icon: "📊", text: "Analyze my data" },
-    { icon: "📈", text: "Forecast sales" },
-    { icon: "🔍", text: "Find anomalies" },
-    { icon: "📄", text: "Generate report" },
-  ];
-
-  const popularActions = [
-    { icon: "📁", title: "Upload & Analyze", desc: "Upload CSV or Excel and get instant insights", id: "upload" },
-    { icon: "💬", title: "Ask Questions", desc: "Chat with your data in plain English", id: "chat" },
-    { icon: "📈", title: "Forecasting", desc: "Predict future values with Prophet AI", id: "forecast" },
-    { icon: "⚙️", title: "Embedder", desc: "Convert any file to embeddings", id: "embed" },
-    { icon: "🗂️", title: "My Files", desc: "View all your uploaded files", id: "files" },
-    { icon: "📜", title: "History", desc: "View past queries and forecasts", id: "history" },
-    { icon: "👔", title: "AI Consultant", desc: "Get expert business advice from your data", id: "consultant" },
-  ];
-
-  const sendMessage = async (question, fid) => {
-    const userMsg = { role: "user", content: question };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setLoading(true);
-
-    try {
-      const res = await axios.post(`${API}/query`, { question, file_id: fid }, { headers });
-      setMessages((prev) => {
-        const next = [...prev, { role: "assistant", content: res.data.answer }];
-        setTypingIndex(next.length - 1);
-        return next;
-      });
-      setChats((prev) => [
-        ...prev,
-        { question, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
-      ]);
-    } catch {
-      setMessages((prev) => {
-        const next = [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }];
-        setTypingIndex(next.length - 1);
-        return next;
-      });
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!standalone && location.state?.pendingMessage) {
-      const msg = location.state.pendingMessage;
-      const fid = location.state.pendingFileId;
-      if (fid) setFileId(fid);
-      sendMessage(msg, fid);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    if (!fileId) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Please upload a file first and enter the File ID to ask questions about your data." },
-      ]);
-      return;
-    }
-
-    if (standalone) {
-      navigate("/workspace/chat", { state: { pendingMessage: input, pendingFileId: fileId } });
-      return;
-    }
-
-    await sendMessage(input, fileId);
-  };
-
-  const handleVoiceInput = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Voice input isn't supported in this browser. Try Chrome.");
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setInput((prev) => (prev ? prev + " " + transcript : transcript));
-    };
-
-    recognition.start();
-  };
-
-  if (activeTool === "upload") {
-    return <UploadTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
-  }
-  if (activeTool === "forecast") {
-    return <ForecastTool headers={headers} />;
-  }
-  if (activeTool === "files") {
-    return <FilesTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
-  }
-  if (activeTool === "history") {
-    return <HistoryTool headers={headers} />;
-  }
-  if (activeTool === "consultant") {
-    return <ConsultantTool headers={headers} />;
-  }
+// ── Floating Particles ────────────────────────────────────
+function FloatingParticles() {
+  const particles = Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 3 + 1,
+    duration: Math.random() * 10 + 8,
+    delay: Math.random() * 5,
+  }));
 
   return (
-    <div className="flex-1 flex flex-col">
-      <style>{`
-        @keyframes msg-slide-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .msg-animate { animation: msg-slide-in 0.3s ease-out; }
-      `}</style>
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {particles.map(p => (
+        <motion.div
+          key={p.id}
+          className="absolute rounded-full"
+          style={{
+            left: `${p.x}%`, top: `${p.y}%`,
+            width: p.size, height: p.size,
+            background: "rgba(125,211,252,0.4)",
+          }}
+          animate={{
+            y: [0, -30, 0],
+            opacity: [0, 0.6, 0],
+            scale: [0, 1, 0],
+          }}
+          transition={{
+            duration: p.duration,
+            delay: p.delay,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
-      {messages.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <h1 className="text-4xl font-bold text-[var(--text-primary)] mb-2">Hello, {username}! 👋</h1>
-          <p className="text-[var(--text-secondary)] text-xl mb-8">How can I help you today?</p>
+// ── Quick Action Card ─────────────────────────────────────
+function QuickCard({ icon: Icon, text, color, onClick, delay }) {
+  const [hovered, setHovered] = useState(false);
+  const [ripples, setRipples] = useState([]);
 
-          {fileId && (
-            <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2 text-green-400 text-sm">
-              ✅ File loaded: {fileId.slice(0, 20)}...
-            </div>
-          )}
+  const handleClick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const id = Date.now();
+    setRipples(prev => [...prev, { x: e.clientX - rect.left, y: e.clientY - rect.top, id }]);
+    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 600);
+    onClick();
+  };
 
-          <div className="flex gap-2 mb-8 flex-wrap justify-center">
-            {quickActions.map((action, i) => (
-              <button
-                key={i}
-                onClick={() => setInput(action.text)}
-                className="bg-[var(--bg-panel)] border border-[var(--border-color)] hover:border-[#f78166]/50 text-[var(--text-secondary)] text-sm px-4 py-2 rounded-xl transition-all flex items-center gap-2"
-              >
-                <span>{action.icon}</span>
-                <span>{action.text}</span>
-              </button>
-            ))}
-          </div>
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, type: "spring", stiffness: 300 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      whileHover={{ y: -4, scale: 1.03 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={handleClick}
+      style={{
+        position: "relative", overflow: "hidden",
+        padding: "12px 16px", borderRadius: 14,
+        background: hovered
+          ? "rgba(59,130,246,0.1)"
+          : "rgba(255,255,255,0.03)",
+        border: hovered
+          ? "1px solid rgba(59,130,246,0.4)"
+          : "1px solid rgba(255,255,255,0.07)",
+        cursor: "pointer",
+        boxShadow: hovered ? "0 8px 30px rgba(59,130,246,0.15)" : "none",
+        transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
+        display: "flex", alignItems: "center", gap: 10,
+        backdropFilter: "blur(10px)",
+      }}
+    >
+      {ripples.map(r => (
+        <motion.div key={r.id}
+          style={{ position: "absolute", left: r.x, top: r.y, width: 4, height: 4, borderRadius: "50%", background: "rgba(125,211,252,0.5)", transform: "translate(-50%,-50%)", pointerEvents: "none" }}
+          animate={{ scale: [0, 10], opacity: [0.5, 0] }}
+          transition={{ duration: 0.6 }}
+        />
+      ))}
+      <motion.div
+        animate={hovered ? { rotate: [0, -10, 10, 0] } : {}}
+        transition={{ duration: 0.4 }}
+        style={{ color: hovered ? "#60A5FA" : "#6B7280", transition: "color 0.2s" }}
+      >
+        <Icon size={16} />
+      </motion.div>
+      <span style={{
+        fontSize: 13, fontWeight: 500,
+        color: hovered ? "#E5E7EB" : "#9CA3AF",
+        transition: "color 0.2s",
+      }}>
+        {text}
+      </span>
+    </motion.button>
+  );
+}
 
-          <div className="grid grid-cols-3 gap-3 w-full max-w-2xl">
-            {popularActions.map((action, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveTool(action.id)}
-                className="bg-[var(--bg-panel)] border border-[var(--border-color)] hover:border-[#f78166]/50 rounded-xl p-4 text-left transition-all group"
-              >
-                <span className="text-2xl mb-2 block">{action.icon}</span>
-                <p className="text-[var(--text-primary)] text-sm font-medium group-hover:text-[#f78166] transition-all">
-                  {action.title}
-                </p>
-                <p className="text-[var(--text-tertiary)] text-xs mt-1">{action.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex msg-animate ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-2xl rounded-2xl px-4 py-3 group relative ${
-                  msg.role === "user"
-                    ? "bg-[#f78166] text-white"
-                    : "bg-[var(--bg-panel)] border border-[var(--border-color)] text-[var(--text-secondary)]"
-                }`}
-              >
-                {msg.role === "assistant" && (
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span>🔮</span>
-                      <span className="text-[#f78166] text-xs font-medium">GenBI</span>
-                    </div>
-                    <CopyButton text={msg.content} />
-                  </div>
-                )}
-                <p className="text-sm whitespace-pre-wrap">
-                  {msg.role === "assistant" && i === typingIndex ? (
-                    <TypingText text={msg.content} onDone={() => setTypingIndex(null)} />
-                  ) : (
-                    msg.content
-                  )}
-                </p>
-              </div>
-            </div>
-          ))}
-          {loading && <ThinkingLoader />}
+// ── Feature Card ──────────────────────────────────────────
+function FeatureCard({ icon: Icon, title, desc, id, onClick, delay, featured }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, type: "spring", stiffness: 250 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      whileHover={{ y: -6, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => onClick(id)}
+      style={{
+        position: "relative", overflow: "hidden",
+        padding: featured ? "20px" : "16px",
+        borderRadius: 18, cursor: "pointer", textAlign: "left",
+        background: featured
+          ? "linear-gradient(135deg, rgba(30,58,95,0.6), rgba(37,99,235,0.2))"
+          : hovered
+          ? "rgba(59,130,246,0.08)"
+          : "rgba(255,255,255,0.02)",
+        border: featured
+          ? "1px solid rgba(59,130,246,0.4)"
+          : hovered
+          ? "1px solid rgba(59,130,246,0.3)"
+          : "1px solid rgba(255,255,255,0.06)",
+        boxShadow: hovered
+          ? featured
+            ? "0 12px 40px rgba(59,130,246,0.3)"
+            : "0 8px 25px rgba(59,130,246,0.15)"
+          : featured
+          ? "0 4px 20px rgba(59,130,246,0.15)"
+          : "none",
+        backdropFilter: "blur(10px)",
+        transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
+      }}
+    >
+      {featured && (
+        <div style={{
+          position: "absolute", top: 12, right: 12,
+          fontSize: 10, padding: "2px 8px", borderRadius: 20,
+          background: "rgba(59,130,246,0.2)",
+          border: "1px solid rgba(59,130,246,0.4)",
+          color: "#60A5FA", fontWeight: 600,
+        }}>
+          ⭐ Recommended
         </div>
       )}
+      <motion.div
+        animate={hovered ? { rotate: [0, -5, 5, 0], scale: [1, 1.1, 1] } : {}}
+        transition={{ duration: 0.4 }}
+        style={{
+          width: featured ? 44 : 36, height: featured ? 44 : 36,
+          borderRadius: 12, marginBottom: 10,
+          background: hovered || featured
+            ? "rgba(59,130,246,0.15)"
+            : "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(59,130,246,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: hovered || featured ? "#60A5FA" : "#6B7280",
+          transition: "all 0.2s",
+        }}
+      >
+        <Icon size={featured ? 20 : 17} />
+      </motion.div>
 
-      <div className="p-4 border-t border-[var(--border-color)]">
-        <div className="mb-2">
-          <input
-            type="text"
-            value={fileId}
-            onChange={(e) => setFileId(e.target.value)}
-            placeholder="Paste File ID here to chat with your data..."
-            className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-[var(--text-secondary)] text-xs focus:outline-none focus:border-[#f78166]/50 transition-all"
-          />
+      <p style={{
+        color: hovered || featured ? "#FFFFFF" : "#E5E7EB",
+        fontSize: featured ? 15 : 13, fontWeight: 600,
+        margin: "0 0 4px 0", transition: "color 0.2s",
+      }}>
+        {title}
+      </p>
+      <p style={{
+        color: "#6B7280", fontSize: 11,
+        margin: 0, lineHeight: 1.5,
+      }}>
+        {desc}
+      </p>
+
+      <motion.div
+        animate={hovered ? { x: 4 } : { x: 0 }}
+        transition={{ type: "spring", stiffness: 300 }}
+        style={{ marginTop: 10, color: hovered ? "#3B82F6" : "#374151" }}
+      >
+        <ArrowRight size={13} />
+      </motion.div>
+    </motion.button>
+  );
+}
+
+// ── Animated Placeholder ──────────────────────────────────
+function AnimatedPlaceholder({ focused }) {
+  const phrases = [
+    "Ask GenBI anything...",
+    "Analyze my sales data...",
+    "Find hidden insights...",
+    "Generate a dashboard...",
+    "Predict next quarter...",
+    "Create executive report...",
+  ];
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    if (focused) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % phrases.length), 3000);
+    return () => clearInterval(t);
+  }, [focused]);
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={idx}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.3 }}
+        style={{
+          position: "absolute", left: 16, top: "50%",
+          transform: "translateY(-50%)",
+          color: "#374151", fontSize: 14,
+          pointerEvents: "none",
+        }}
+      >
+        {phrases[idx]}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+// ── Home Screen ───────────────────────────────────────────
+function HomeScreen({ username, setActiveTool, setInput, fileId }) {
+  const quickActions = [
+    { icon: BarChart3, text: "Analyze my data", action: () => setInput("Analyze my data") },
+    { icon: TrendingUp, text: "Forecast sales", action: () => setInput("Forecast sales") },
+    { icon: Search, text: "Find anomalies", action: () => setInput("Find anomalies") },
+    { icon: FileText, text: "Generate report", action: () => setActiveTool("upload") },
+  ];
+
+  const features = [
+    { icon: Upload, title: "Upload & Analyze", desc: "Upload CSV or Excel and get instant AI insights", id: "upload" },
+    { icon: MessageSquare, title: "Ask Questions", desc: "Chat with your data in plain English", id: "chat" },
+    { icon: TrendingUp, title: "Forecasting", desc: "Predict future values with Prophet AI", id: "forecast" },
+    { icon: FolderOpen, title: "My Files", desc: "Manage all your uploaded datasets", id: "files" },
+    { icon: History, title: "History", desc: "Review past queries and forecasts", id: "history" },
+    { icon: Settings, title: "Embedder", desc: "Convert any file to AI embeddings", id: "embed" },
+    { icon: Briefcase, title: "AI Consultant", desc: "Full SWOT, KPIs, strategic roadmap & growth plan", id: "upload", featured: true },
+  ];
+
+  return (
+    <div style={{
+      flex: 1, display: "flex", flexDirection: "column",
+      alignItems: "center",
+      padding: "24px 24px 16px",
+      position: "relative",
+      overflowY: "auto",
+      maxHeight: "calc(100vh - 56px - 120px)",
+    }}>
+      <FloatingParticles />
+
+      {/* Aurora blobs */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+        <motion.div
+          animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.8, 0.5] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            position: "absolute", width: 600, height: 600, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(59,130,246,0.07) 0%, transparent 70%)",
+            top: "10%", left: "50%", transform: "translateX(-50%)",
+          }}
+        />
+      </div>
+
+      <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 720 }}>
+
+        {/* Welcome */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          style={{ textAlign: "center", marginBottom: 20 }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              marginBottom: 16, padding: "4px 12px", borderRadius: 20,
+              background: "rgba(59,130,246,0.1)",
+              border: "1px solid rgba(59,130,246,0.2)",
+            }}
+          >
+            <motion.div
+              animate={{ scale: [1, 1.3, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 6px #22c55e" }}
+            />
+            <span style={{ color: "#60A5FA", fontSize: 11, fontWeight: 600 }}>AI Ready · GenBI</span>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            style={{
+              fontSize: 28, fontWeight: 800, margin: "0 0 8px 0",
+              background: "linear-gradient(135deg, #FFFFFF 0%, #60A5FA 60%, #7DD3FC 100%)",
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            Hello, {username}! 👋
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            style={{ color: "#9CA3AF", fontSize: 15, margin: "0 0 4px 0" }}
+          >
+            Welcome back to GenBI AI
+          </motion.p>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            style={{ color: "#4B5563", fontSize: 13, margin: 0 }}
+          >
+            Transform your business data into intelligent decisions powered by AI.
+          </motion.p>
+
+          {fileId && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                marginTop: 12, padding: "6px 14px", borderRadius: 20,
+                background: "rgba(34,197,94,0.1)",
+                border: "1px solid rgba(34,197,94,0.2)",
+              }}
+            >
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e" }} />
+              <span style={{ color: "#22c55e", fontSize: 11 }}>
+                File loaded: {fileId.slice(0, 16)}...
+              </span>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* Quick Actions */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 6, marginBottom: 16,
+        }}>
+          {quickActions.map((a, i) => (
+            <QuickCard
+              key={i} icon={a.icon} text={a.text}
+              delay={0.5 + i * 0.08}
+              onClick={a.action}
+            />
+          ))}
         </div>
-        <div className="flex items-center gap-3 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl px-4 py-3 focus-within:border-[#f78166]/50 transition-all">
-          <button
-            onClick={() => setActiveTool("upload")}
-            className="text-[var(--text-tertiary)] hover:text-[#f78166] transition-all text-lg"
-            title="Upload file"
-          >
-            📎
-          </button>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask GenBI anything..."
-            className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-quaternary)] outline-none text-sm"
-          />
-          <button
-            onClick={handleVoiceInput}
-            className={`text-lg transition-all ${listening ? "text-red-400 animate-pulse" : "text-[var(--text-tertiary)] hover:text-[#f78166]"}`}
-            title="Voice input"
-          >
-            🎤
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            className="w-8 h-8 bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-30 rounded-xl flex items-center justify-center transition-all"
-          >
-            <span className="text-white text-sm">→</span>
-          </button>
+
+       {/* Feature Grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 8,
+          marginBottom: 8,
+        }}>
+          {features.slice(0, 6).map((f, i) => (
+            <FeatureCard
+              key={f.id + i} {...f}
+              onClick={setActiveTool}
+              delay={0.7 + i * 0.07}
+            />
+          ))}
         </div>
+
+        {/* Featured AI Consultant Card */}
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.1, type: "spring" }}
+          onClick={() => setActiveTool("upload")}
+          whileHover={{ y: -4, scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          style={{
+            width: "100%", textAlign: "left",
+            padding: "20px 24px", borderRadius: 18,
+            background: "linear-gradient(135deg, rgba(30,58,95,0.7), rgba(37,99,235,0.25))",
+            border: "1px solid rgba(59,130,246,0.35)",
+            cursor: "pointer", position: "relative", overflow: "hidden",
+            boxShadow: "0 4px 24px rgba(59,130,246,0.15)",
+            backdropFilter: "blur(10px)",
+            display: "flex", alignItems: "center", gap: 20,
+          }}
+        >
+          {/* Glow blob */}
+          <div style={{
+            position: "absolute", right: -40, top: -40,
+            width: 200, height: 200, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(125,211,252,0.08) 0%, transparent 70%)",
+            pointerEvents: "none",
+          }} />
+
+          {/* Icon */}
+          <div style={{
+            width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+            background: "rgba(59,130,246,0.15)",
+            border: "1px solid rgba(59,130,246,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 26,
+          }}>
+            👔
+          </div>
+
+          {/* Text */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <p style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 700, margin: 0 }}>
+                AI Business Consultant
+              </p>
+              <span style={{
+                fontSize: 10, padding: "2px 8px", borderRadius: 20,
+                background: "rgba(59,130,246,0.2)",
+                border: "1px solid rgba(59,130,246,0.4)",
+                color: "#60A5FA", fontWeight: 600,
+              }}>⭐ Recommended</span>
+            </div>
+            <p style={{ color: "#9CA3AF", fontSize: 13, margin: 0 }}>
+              Full SWOT analysis · KPIs · Strategic roadmap · Growth plan · Industry intelligence
+            </p>
+          </div>
+
+          {/* Arrow */}
+          <div style={{ color: "#3B82F6", flexShrink: 0 }}>
+            <ArrowRight size={20} />
+          </div>
+        </motion.button>
       </div>
     </div>
   );
 }
 
-// ── Copy Button ───────────────────────────────────────────
-function CopyButton({ text }) {
-  const { showToast } = useToast();
-  const [copied, setCopied] = useState(false);
+// ── Main ChatArea ─────────────────────────────────────────
+export default function ChatArea({ activeTool, setActiveTool, setChats }) {
+  const { username, token } = useAuth();
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [fileId, setFileId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [fileIdFocused, setFileIdFocused] = useState(false);
+  const inputRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      showToast("Copied to clipboard!", "success");
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      showToast("Couldn't copy. Try selecting manually.", "error");
+  const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    if (!fileId) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "Please paste a File ID below to chat with your data. Upload a file first from the Upload tool."
+      }]);
+      return;
     }
+    const userMsg = { role: "user", content: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API}/query`, { question: input, file_id: fileId }, { headers });
+      setMessages(prev => [...prev, { role: "assistant", content: res.data.answer }]);
+      if (setChats) setChats(prev => [...prev, {
+        question: input,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      }]);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
+    }
+    setLoading(false);
   };
 
-  return (
-    <button
-      onClick={handleCopy}
-      className="text-[var(--text-tertiary)] hover:text-[#f78166] text-xs opacity-0 group-hover:opacity-100 transition-all"
-      title="Copy answer"
-    >
-      {copied ? "✅ Copied" : "📋 Copy"}
-    </button>
-  );
-}
-
-// ── Typing Effect ─────────────────────────────────────────
-function TypingText({ text, onDone }) {
-  const [display, setDisplay] = useState("");
-  const doneRef = useRef(false);
-
-  useEffect(() => {
-    doneRef.current = false;
-    setDisplay("");
-    let i = 0;
-    const words = text.split(" ");
-    const interval = setInterval(() => {
-      i++;
-      setDisplay(words.slice(0, i).join(" "));
-      if (i >= words.length) {
-        clearInterval(interval);
-        if (!doneRef.current) {
-          doneRef.current = true;
-          onDone && onDone();
-        }
-      }
-    }, 35);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
-
-  return <>{display}</>;
-}
-
-// ── Animated Thinking Loader ─────────────────────────────
-function ThinkingLoader() {
-  const [phraseIndex, setPhraseIndex] = useState(0);
-  const phrases = ["Reading your data...", "Crunching the numbers...", "Connecting the dots...", "Almost there..."];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPhraseIndex((i) => (i + 1) % phrases.length);
-    }, 1800);
-    return () => clearInterval(interval);
-  }, []);
+  if (activeTool === "upload") return <UploadTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
+  if (activeTool === "forecast") return <ForecastTool headers={headers} />;
+  if (activeTool === "files") return <FilesTool headers={headers} setFileId={setFileId} setActiveTool={setActiveTool} />;
+  if (activeTool === "history") return <HistoryTool headers={headers} />;
+  if (activeTool === "autodashboard") return <ChartDashboard headers={headers} />;
 
   return (
-    <div className="flex justify-start">
-      <style>{`
-        @keyframes genbi-spin { to { transform: rotate(360deg); } }
-        @keyframes genbi-pulse-glow {
-          0%, 100% { box-shadow: 0 0 8px 2px rgba(247,129,102,0.4); }
-          50% { box-shadow: 0 0 16px 6px rgba(188,140,255,0.5); }
-        }
-        @keyframes genbi-fade-slide {
-          0% { opacity: 0; transform: translateY(4px); }
-          15% { opacity: 1; transform: translateY(0); }
-          85% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(-4px); }
-        }
-        .genbi-ring { animation: genbi-spin 1.2s linear infinite; }
-        .genbi-orb { animation: genbi-pulse-glow 1.6s ease-in-out infinite; }
-        .genbi-phrase { animation: genbi-fade-slide 1.8s ease-in-out; }
-      `}</style>
-      <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl px-4 py-3 flex items-center gap-3">
-        <div className="relative w-7 h-7 flex items-center justify-center shrink-0">
-          <div
-            className="genbi-ring absolute inset-0 rounded-full"
-            style={{
-              background: "conic-gradient(from 0deg, #f78166, #bc8cff, #58a6ff, #f78166)",
-              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0)",
-              mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0)",
-            }}
-          ></div>
-          <div className="genbi-orb w-3.5 h-3.5 rounded-full bg-[var(--bg-app)] flex items-center justify-center text-[10px]">
-            🔮
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", overflow: "hidden" }}>
+
+      {/* Scrollable content area */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {messages.length === 0 ? (
+          <HomeScreen
+            username={username}
+            setActiveTool={setActiveTool}
+            setInput={setInput}
+            fileId={fileId}
+          />
+        ) : (
+          <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <AnimatePresence>
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}
+                >
+                  <div style={{
+                    maxWidth: 640, borderRadius: 18,
+                    padding: "12px 16px",
+                    background: msg.role === "user"
+                      ? "linear-gradient(135deg, #1e3a5f, #3B82F6)"
+                      : "rgba(255,255,255,0.04)",
+                    border: msg.role === "user"
+                      ? "1px solid rgba(125,211,252,0.3)"
+                      : "1px solid rgba(255,255,255,0.07)",
+                    boxShadow: msg.role === "user"
+                      ? "0 4px 20px rgba(59,130,246,0.2)"
+                      : "none",
+                  }}>
+                    {msg.role === "assistant" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <Sparkles size={12} color="#3B82F6" />
+                        <span style={{ color: "#3B82F6", fontSize: 11, fontWeight: 600 }}>GenBI AI</span>
+                      </div>
+                    )}
+                    <p style={{ color: "#E5E7EB", fontSize: 14, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                      {msg.content}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {loading && <AILoading />}
+            <div ref={messagesEndRef} />
           </div>
+        )}
+      </div>
+
+      {/* Input Area - always at bottom */}
+      <div style={{
+        padding: "12px 20px 16px",
+        background: "rgba(15,23,42,0.8)",
+        backdropFilter: "blur(12px)",
+        borderTop: "1px solid rgba(255,255,255,0.05)",
+        flexShrink: 0,
+      }}>
+        {/* File ID */}
+        <div style={{ marginBottom: 8, position: "relative" }}>
+          <input
+            value={fileId}
+            onChange={e => setFileId(e.target.value)}
+            onFocus={() => setFileIdFocused(true)}
+            onBlur={() => setFileIdFocused(false)}
+            placeholder="Paste File ID to chat with your data..."
+            style={{
+              width: "100%", padding: "7px 14px",
+              borderRadius: 10, fontSize: 12, outline: "none",
+              background: fileIdFocused ? "rgba(59,130,246,0.06)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${fileIdFocused ? "rgba(59,130,246,0.4)" : "rgba(255,255,255,0.06)"}`,
+              color: fileId ? "#22c55e" : "#6B7280",
+              fontFamily: fileId ? "monospace" : "Inter, sans-serif",
+              transition: "all 0.2s", boxSizing: "border-box",
+            }}
+          />
+          {fileId && (
+            <div style={{
+              position: "absolute", right: 12, top: "50%",
+              transform: "translateY(-50%)",
+              width: 6, height: 6, borderRadius: "50%",
+              background: "#22c55e", boxShadow: "0 0 6px #22c55e",
+            }} />
+          )}
         </div>
-        <span key={phraseIndex} className="genbi-phrase text-[var(--text-secondary)] text-sm min-w-[160px]">
-          {phrases[phraseIndex]}
-        </span>
+
+        {/* Main input */}
+        <motion.div
+          animate={inputFocused ? {
+            boxShadow: "0 0 0 1px rgba(59,130,246,0.4), 0 4px 20px rgba(59,130,246,0.12)"
+          } : {
+            boxShadow: "0 0 0 1px rgba(255,255,255,0.06)"
+          }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: inputFocused ? "rgba(59,130,246,0.05)" : "rgba(255,255,255,0.03)",
+            borderRadius: 14, padding: "8px 12px",
+            border: `1px solid ${inputFocused ? "rgba(59,130,246,0.35)" : "rgba(255,255,255,0.06)"}`,
+            backdropFilter: "blur(10px)",
+            transition: "background 0.2s, border 0.2s",
+            position: "relative",
+          }}
+        >
+          <motion.button
+            onClick={() => setActiveTool("upload")}
+            whileHover={{ rotate: 15, scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4, display: "flex", alignItems: "center" }}
+          >
+            <Paperclip size={16} />
+          </motion.button>
+
+          <div style={{ flex: 1, position: "relative", height: 24 }}>
+            {!input && !inputFocused && <AnimatedPlaceholder focused={inputFocused} />}
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              style={{
+                width: "100%", background: "transparent",
+                border: "none", outline: "none",
+                color: "#FFFFFF", fontSize: 14,
+                fontFamily: "Inter, sans-serif",
+                position: "absolute", top: 0, left: 0,
+              }}
+            />
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4, display: "flex", alignItems: "center" }}
+          >
+            <Mic size={16} />
+          </motion.button>
+
+          <motion.button
+            onClick={handleSend}
+            disabled={loading || !input.trim()}
+            whileHover={!loading && input.trim() ? { scale: 1.05, y: -1 } : {}}
+            whileTap={!loading && input.trim() ? { scale: 0.95 } : {}}
+            style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: input.trim()
+                ? "linear-gradient(135deg, #1e3a5f, #3B82F6)"
+                : "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(125,211,252,0.2)",
+              cursor: input.trim() ? "pointer" : "not-allowed",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              opacity: loading ? 0.6 : 1,
+              boxShadow: input.trim() ? "0 4px 15px rgba(59,130,246,0.3)" : "none",
+              transition: "all 0.2s", flexShrink: 0,
+            }}
+          >
+            {loading
+              ? <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                  style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white" }}
+                />
+              : <Send size={13} color={input.trim() ? "white" : "#374151"} />
+            }
+          </motion.button>
+        </motion.div>
+
+        <p style={{ color: "#374151", fontSize: 10, textAlign: "center", marginTop: 6, marginBottom: 0 }}>
+          GenBI AI · Local LLM · Your data stays private
+        </p>
       </div>
     </div>
   );
@@ -369,9 +699,7 @@ function ThinkingLoader() {
 
 // ── Upload Tool ──────────────────────────────────────────
 function UploadTool({ headers, setFileId, setActiveTool }) {
-  const { showToast } = useToast();
   const [file, setFile] = useState(null);
-  const [dragActive, setDragActive] = useState(false);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -379,342 +707,376 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [recommendations, setRecommendations] = useState(null);
   const [recsLoading, setRecsLoading] = useState(false);
+  const [dataQuality, setDataQuality] = useState(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [rootCause, setRootCause] = useState(null);
+  const [rootCauseLoading, setRootCauseLoading] = useState(false);
   const [sqlResult, setSqlResult] = useState(null);
   const [sqlLoading, setSqlLoading] = useState(false);
   const [sqlQuestion, setSqlQuestion] = useState("What is the total sales by category?");
+  const [consultant, setConsultant] = useState(null);
+  const [consultantLoading, setConsultantLoading] = useState(false);
   const [industry, setIndustry] = useState(null);
   const [industryLoading, setIndustryLoading] = useState(false);
   const [detectedIndustry, setDetectedIndustry] = useState("general");
+  const [isDragging, setIsDragging] = useState(false);
+  const { showToast } = useToast();
 
-  const handleUpload = async (fileToUpload) => {
-    const uploadFile = fileToUpload || file;
-    if (!uploadFile) return;
-    setLoading(true);
-    setError("");
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true); setError("");
     const formData = new FormData();
-    formData.append("file", uploadFile);
+    formData.append("file", file);
     try {
       const res = await axios.post(`${API}/upload`, formData, { headers });
-      setResult(res.data);
-      setFileId(res.data.file_id);
-      showToast("File uploaded and indexed successfully!", "success");
+      setResult(res.data); setFileId(res.data.file_id);
+      showToast(`✅ ${res.data.filename} uploaded!`, "success");
     } catch (e) {
-      const msg = e.response?.data?.detail || "Upload failed";
-      setError(msg);
-      showToast(msg, "error");
+      setError(e.response?.data?.detail || "Upload failed");
+      showToast("❌ Upload failed.", "error");
     }
     setLoading(false);
   };
 
   const handleInsights = async () => {
-    if (!file) return;
-    setInsightsLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await axios.post(`${API}/insights`, formData, { headers });
-      setInsights(res.data);
-      showToast("Insights generated!", "success");
-    } catch (e) {
-      console.error("Insights failed:", e);
-      showToast("Couldn't generate insights.", "error");
-    }
+    if (!file) return; setInsightsLoading(true);
+    const f = new FormData(); f.append("file", file);
+    try { const res = await axios.post(`${API}/insights`, f, { headers }); setInsights(res.data); showToast("🔮 Insights generated!", "success"); }
+    catch { showToast("❌ Insights failed.", "error"); }
     setInsightsLoading(false);
   };
 
   const handleRecommendations = async () => {
-    if (!file) return;
-    setRecsLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await axios.post(`${API}/recommendations`, formData, { headers });
-      setRecommendations(res.data);
-      showToast("Recommendations ready!", "success");
-    } catch (e) {
-      console.error("Recommendations failed:", e);
-      showToast("Couldn't generate recommendations.", "error");
-    }
+    if (!file) return; setRecsLoading(true);
+    const f = new FormData(); f.append("file", file);
+    try { const res = await axios.post(`${API}/recommendations`, f, { headers }); setRecommendations(res.data); showToast("💡 Recommendations ready!", "success"); }
+    catch { showToast("❌ Failed.", "error"); }
     setRecsLoading(false);
   };
 
-  const handleSQL = async () => {
-    if (!file) return;
-    setSqlLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("question", sqlQuestion);
+  const handleDataQuality = async () => {
+    if (!file) return; setQualityLoading(true);
+    const f = new FormData(); f.append("file", file);
+    try { const res = await axios.post(`${API}/data-quality`, f, { headers }); setDataQuality(res.data); showToast("🧹 Quality analysis done!", "success"); }
+    catch { showToast("❌ Failed.", "error"); }
+    setQualityLoading(false);
+  };
+
+  const handlePDFReport = async () => {
+    if (!file) return; setPdfLoading(true);
+    const f = new FormData(); f.append("file", file);
     try {
-      const res = await axios.post(`${API}/generate-sql`, formData, { headers });
-      setSqlResult(res.data);
-      showToast("SQL generated successfully!", "success");
-    } catch (e) {
-      console.error("SQL generation failed:", e);
-      showToast("SQL generation failed.", "error");
-    }
+      const res = await axios.post(`${API}/generate-report`, f, { headers: { ...headers }, responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a"); link.href = url;
+      link.setAttribute("download", `GenBI_Report_${file.name}.pdf`);
+      document.body.appendChild(link); link.click(); link.remove();
+      showToast("📄 PDF downloaded!", "success");
+    } catch { showToast("❌ PDF failed.", "error"); }
+    setPdfLoading(false);
+  };
+
+  const handleRootCause = async () => {
+    if (!file) return; setRootCauseLoading(true);
+    const f = new FormData(); f.append("file", file);
+    try { const res = await axios.post(`${API}/root-cause`, f, { headers }); setRootCause(res.data); showToast("🔍 Root cause done!", "success"); }
+    catch { showToast("❌ Failed.", "error"); }
+    setRootCauseLoading(false);
+  };
+
+  const handleSQL = async () => {
+    if (!file) return; setSqlLoading(true);
+    const f = new FormData(); f.append("file", file); f.append("question", sqlQuestion);
+    try { const res = await axios.post(`${API}/generate-sql`, f, { headers }); setSqlResult(res.data); showToast("🔷 SQL generated!", "success"); }
+    catch { showToast("❌ Failed.", "error"); }
     setSqlLoading(false);
   };
 
+  const handleConsultant = async () => {
+    if (!file) return; setConsultantLoading(true);
+    const f = new FormData(); f.append("file", file);
+    try { const res = await axios.post(`${API}/business-consultant`, f, { headers }); setConsultant(res.data); showToast("👔 Consultation complete!", "success"); }
+    catch { showToast("❌ Failed.", "error"); }
+    setConsultantLoading(false);
+  };
+
   const handleIndustry = async () => {
-    if (!file) return;
-    setIndustryLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
+    if (!file) return; setIndustryLoading(true);
+    const f = new FormData(); f.append("file", file);
     try {
-      const res = await axios.post(`${API}/industry-intelligence`, formData, { headers });
-      setIndustry(res.data);
-      setDetectedIndustry(res.data.detected_industry);
-      showToast(`🏭 ${res.data.industry_display} intelligence ready!`, "success");
-    } catch (e) {
-      console.error("Industry analysis failed:", e);
-      showToast("❌ Industry analysis failed.", "error");
-    }
+      const res = await axios.post(`${API}/industry-intelligence`, f, { headers });
+      setIndustry(res.data); setDetectedIndustry(res.data.detected_industry);
+      showToast(`🏭 ${res.data.industry_display} intel ready!`, "success");
+    } catch { showToast("❌ Failed.", "error"); }
     setIndustryLoading(false);
   };
 
   const handleDrop = (e) => {
-    e.preventDefault();
-    setDragActive(false);
-    const dropped = e.dataTransfer.files?.[0];
-    if (dropped) {
-      setFile(dropped);
-      showToast(`"${dropped.name}" ready to upload`, "info");
-    }
+    e.preventDefault(); setIsDragging(false);
+    const f = e.dataTransfer.files[0];
+    if (f && (f.name.endsWith(".csv") || f.name.endsWith(".xlsx"))) {
+      setFile(f); showToast(`📎 ${f.name} selected!`, "info");
+    } else showToast("❌ CSV or Excel only.", "error");
   };
 
+  const btnStyle = (color) => ({
+    flex: 1, padding: "8px 10px", borderRadius: 10, fontSize: 12,
+    fontWeight: 500, cursor: "pointer", border: `1px solid ${color}30`,
+    background: `${color}15`, color: color, transition: "all 0.2s",
+  });
+
+  const cardStyle = (borderColor) => ({
+    background: "rgba(255,255,255,0.02)",
+    border: `1px solid ${borderColor || "rgba(255,255,255,0.07)"}`,
+    borderRadius: 18, padding: 20, marginBottom: 12,
+  });
+
   return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full overflow-y-auto">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📁 Upload File</h2>
-      <p className="text-[var(--text-secondary)] mb-4">Upload your CSV or Excel file to start analyzing</p>
+    <div style={{
+      flex: 1, padding: "24px", maxWidth: 720,
+      margin: "0 auto", width: "100%", overflowY: "auto",
+    }}>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+        <h2 style={{ color: "#FFFFFF", fontSize: 22, fontWeight: 700, margin: "0 0 4px 0" }}>📁 Upload File</h2>
+        <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 16px 0" }}>Upload your CSV or Excel to start analyzing</p>
 
-      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2 mb-6">
-        <span>🔒</span>
-        <p className="text-green-400 text-xs">Your data is encrypted and private — we never share or sell your files</p>
-      </div>
+        {/* Privacy */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)",
+          borderRadius: 12, padding: "8px 14px", marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 12 }}>🔒</span>
+          <span style={{ color: "#22c55e", fontSize: 12 }}>Your data is encrypted and private — we never share or sell your files</span>
+        </div>
 
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
-          dragActive ? "border-[#f78166] bg-[#f78166]/5 scale-[1.01]" : "border-[var(--border-color)] hover:border-[#f78166]/50"
-        }`}
-      >
-        <div className="text-5xl mb-4">{dragActive ? "📥" : "📂"}</div>
-        <p className="text-[var(--text-secondary)] mb-4">
-          {dragActive ? "Drop it right here!" : "Drop your file here or click to browse"}
-        </p>
-        <input
-          type="file"
-          accept=".csv,.xlsx"
-          onChange={(e) => {
-            setFile(e.target.files[0]);
-            showToast(`"${e.target.files[0].name}" selected`, "info");
+        {/* Drop Zone */}
+        <motion.div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          animate={isDragging ? { scale: 1.01, borderColor: "#3B82F6" } : {}}
+          style={{
+            border: `2px dashed ${isDragging ? "#3B82F6" : "rgba(255,255,255,0.1)"}`,
+            borderRadius: 18, padding: "32px 20px", textAlign: "center",
+            background: isDragging ? "rgba(59,130,246,0.06)" : "rgba(255,255,255,0.02)",
+            marginBottom: 12, cursor: "pointer", transition: "all 0.2s",
           }}
-          className="hidden"
-          id="fileInput"
-        />
-        <label
-          htmlFor="fileInput"
-          className="bg-[var(--bg-panel-alt)] border border-[var(--border-color)] text-[var(--text-secondary)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#f78166]/50 transition-all text-sm"
         >
-          Choose File
-        </label>
-        {file && <p className="text-[#f78166] mt-3 text-sm">✅ {file.name}</p>}
-      </div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>{isDragging ? "📂" : "📁"}</div>
+          <p style={{ color: "#9CA3AF", fontSize: 14, margin: "0 0 4px 0" }}>
+            {isDragging ? "Drop your file here!" : "Drag & drop or click to browse"}
+          </p>
+          <p style={{ color: "#4B5563", fontSize: 12, margin: "0 0 16px 0" }}>Supports CSV and Excel files</p>
+          <input type="file" accept=".csv,.xlsx"
+            onChange={(e) => { setFile(e.target.files[0]); showToast(`📎 ${e.target.files[0].name} selected!`, "info"); }}
+            className="hidden" id="fileInput" />
+          <label htmlFor="fileInput" style={{
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10, padding: "8px 18px", cursor: "pointer",
+            color: "#9CA3AF", fontSize: 13, transition: "all 0.2s",
+          }}>
+            Choose File
+          </label>
+          {file && <p style={{ color: "#3B82F6", marginTop: 12, fontSize: 13 }}>✅ {file.name}</p>}
+        </motion.div>
 
-      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+        {error && <p style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</p>}
 
-      <button
-        onClick={() => handleUpload()}
-        disabled={!file || loading}
-        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
-      >
-        {loading ? "Uploading & Indexing..." : "Upload & Index 🚀"}
-      </button>
+        <motion.button
+          onClick={handleUpload}
+          disabled={!file || loading}
+          whileHover={file && !loading ? { y: -2, boxShadow: "0 8px 30px rgba(59,130,246,0.4)" } : {}}
+          whileTap={{ scale: 0.98 }}
+          style={{
+            width: "100%", padding: "13px", borderRadius: 14,
+            background: "linear-gradient(135deg, #1e3a5f, #3B82F6)",
+            border: "1px solid rgba(125,211,252,0.25)",
+            color: "white", fontSize: 14, fontWeight: 600,
+            cursor: file && !loading ? "pointer" : "not-allowed",
+            opacity: !file || loading ? 0.5 : 1,
+            boxShadow: "0 4px 20px rgba(59,130,246,0.25)",
+            transition: "all 0.2s", marginBottom: 20,
+          }}
+        >
+          {loading ? "Uploading & Indexing..." : "Upload & Index 🚀"}
+        </motion.button>
 
-      {result && (
-        <div className="mt-6 space-y-4">
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
-            <p className="text-green-400 font-medium mb-4">✅ File uploaded successfully!</p>
-            <div className="space-y-2 text-sm">
-              <p className="text-[var(--text-secondary)]">📄 <span className="text-[var(--text-primary)]">{result.filename}</span></p>
-              <p className="text-[var(--text-secondary)]">📊 Rows: <span className="text-[var(--text-primary)]">{result.rows}</span></p>
-              <p className="text-[var(--text-secondary)]">🗂️ Columns: <span className="text-[var(--text-primary)]">{result.columns?.join(", ")}</span></p>
-              <p className="text-[var(--text-secondary)]">🧩 Chunks: <span className="text-[var(--text-primary)]">{result.chunks_indexed}</span></p>
-              <div className="bg-[var(--bg-panel-alt)] rounded-xl p-3 mt-3">
-                <p className="text-[var(--text-tertiary)] text-xs mb-1">File ID (copy this):</p>
-                <p className="text-[#f78166] font-mono text-xs break-all">{result.file_id}</p>
+        {result && (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            {/* File Info */}
+            <div style={cardStyle("rgba(34,197,94,0.2)")}>
+              <p style={{ color: "#22c55e", fontWeight: 600, margin: "0 0 12px 0" }}>✅ File uploaded successfully!</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                {[
+                  ["📄 File", result.filename],
+                  ["📊 Rows", result.rows],
+                  ["🗂️ Columns", result.columns?.join(", ")],
+                  ["🧩 Chunks", result.chunks_indexed],
+                ].map(([label, value], i) => (
+                  <div key={i} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "8px 12px" }}>
+                    <p style={{ color: "#6B7280", fontSize: 11, margin: "0 0 2px 0" }}>{label}</p>
+                    <p style={{ color: "#E5E7EB", fontSize: 12, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+                <p style={{ color: "#6B7280", fontSize: 10, margin: "0 0 4px 0" }}>File ID</p>
+                <p style={{ color: "#3B82F6", fontSize: 11, fontFamily: "monospace", margin: 0, wordBreak: "break-all" }}>{result.file_id}</p>
+              </div>
+
+              {/* Action Buttons Row 1 */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <button onClick={() => setActiveTool("chat")} style={btnStyle("#f78166")}>💬 Chat</button>
+                <button onClick={handleInsights} disabled={insightsLoading} style={btnStyle("#bc8cff")}>{insightsLoading ? "..." : "🔮 Insights"}</button>
+                <button onClick={handleRecommendations} disabled={recsLoading} style={btnStyle("#58a6ff")}>{recsLoading ? "..." : "💡 Recs"}</button>
+              </div>
+              {/* Action Buttons Row 2 */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <button onClick={handleDataQuality} disabled={qualityLoading} style={btnStyle("#3fb950")}>{qualityLoading ? "..." : "🧹 Quality"}</button>
+                <button onClick={handlePDFReport} disabled={pdfLoading} style={btnStyle("#ffa657")}>{pdfLoading ? "..." : "📄 PDF"}</button>
+                <button onClick={handleRootCause} disabled={rootCauseLoading} style={btnStyle("#ff7b72")}>{rootCauseLoading ? "..." : "🔍 Root Cause"}</button>
+              </div>
+              {/* Action Buttons Row 3 */}
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={handleConsultant} disabled={consultantLoading} style={btnStyle("#ffa657")}>{consultantLoading ? "..." : "👔 Consultant"}</button>
+                <button onClick={handleIndustry} disabled={industryLoading} style={btnStyle("#bc8cff")}>{industryLoading ? "..." : "🏭 Industry"}</button>
+                <button onClick={() => setActiveTool("autodashboard")} style={btnStyle("#58a6ff")}>📊 Dashboard</button>
               </div>
             </div>
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => setActiveTool("chat")}
-                className="flex-1 bg-[#f78166]/20 border border-[#f78166]/30 text-[#f78166] py-2 rounded-xl text-sm hover:bg-[#f78166]/30 transition-all"
-              >
-                Start Chatting →
-              </button>
-              <button
-                onClick={handleInsights}
-                disabled={insightsLoading}
-                className="flex-1 bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
-              >
-                {insightsLoading ? "Analyzing..." : "🔮 Get Insights"}
-              </button>
-              <button
-                onClick={handleRecommendations}
-                disabled={recsLoading}
-                className="flex-1 bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
-              >
-                {recsLoading ? "Analyzing..." : "💡 Recommendations"}
-              </button>
-              <button
-                onClick={handleSQL}
-                disabled={sqlLoading}
-                className="flex-1 bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] py-2 rounded-xl text-sm hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
-              >
-                {sqlLoading ? "Generating..." : "🔷 SQL Query"}
-              </button>
-              <button
-                onClick={handleIndustry}
-                disabled={industryLoading}
-                className="flex-1 bg-[#bc8cff]/20 border border-[#bc8cff]/30 text-[#bc8cff] py-2 rounded-xl text-sm hover:bg-[#bc8cff]/30 transition-all disabled:opacity-50"
-              >
-                {industryLoading ? "Analyzing..." : "🏭 Industry Intel"}
-              </button>
-            </div>
-          </div>
 
-          {result.summary && (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[var(--text-primary)] font-semibold">🔮 AI Data Summary</p>
-                <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                  result.summary.quality_score === 100
-                    ? "bg-green-500/20 text-green-400"
-                    : result.summary.quality_score > 80
-                    ? "bg-yellow-500/20 text-yellow-400"
-                    : "bg-red-500/20 text-red-400"
-                }`}>
-                  Quality: {result.summary.quality_score}%
-                </span>
-              </div>
-              <div className="space-y-2 mb-4">
+            {/* Summary */}
+            {result.summary && (
+              <div style={cardStyle()}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <p style={{ color: "#E5E7EB", fontWeight: 600, margin: 0 }}>🔮 AI Data Summary</p>
+                  <span style={{
+                    fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
+                    background: result.summary.quality_score >= 90 ? "rgba(34,197,94,0.1)" : "rgba(251,191,36,0.1)",
+                    border: `1px solid ${result.summary.quality_score >= 90 ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)"}`,
+                    color: result.summary.quality_score >= 90 ? "#22c55e" : "#fbbf24",
+                  }}>
+                    Quality: {result.summary.quality_score}%
+                  </span>
+                </div>
                 {result.summary.insights?.map((insight, i) => (
-                  <p key={i} className="text-[var(--text-secondary)] text-sm bg-[var(--bg-panel-alt)] rounded-xl px-3 py-2">
-                    {insight}
-                  </p>
+                  <p key={i} style={{ color: "#9CA3AF", fontSize: 13, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "8px 12px", margin: "0 0 6px 0" }}>{insight}</p>
                 ))}
-              </div>
-
-              <p className="text-[var(--text-tertiary)] text-xs mb-3">Column Analysis:</p>
-              <div className="space-y-2">
-                {Object.entries(result.summary.column_info || {}).map(([col, info]) => (
-                  <div key={col} className="bg-[var(--bg-panel-alt)] rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[var(--text-primary)] text-xs font-medium">{col}</p>
-                      <span className="text-[var(--text-tertiary)] text-xs">{info.type}</span>
+                <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
+                  {Object.entries(result.summary.column_info || {}).map(([col, info]) => (
+                    <div key={col} style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "8px 12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ color: "#E5E7EB", fontSize: 12, fontWeight: 600 }}>{col}</span>
+                        <span style={{ color: "#4B5563", fontSize: 11 }}>{info.type}</span>
+                      </div>
+                      {info.min !== undefined
+                        ? <p style={{ color: "#6B7280", fontSize: 11, margin: 0 }}>Min: <span style={{ color: "#3B82F6" }}>{info.min}</span> · Max: <span style={{ color: "#3B82F6" }}>{info.max}</span> · Avg: <span style={{ color: "#3B82F6" }}>{info.mean}</span></p>
+                        : <p style={{ color: "#6B7280", fontSize: 11, margin: 0 }}>Top: {Object.keys(info.top_values || {}).join(", ")}</p>
+                      }
                     </div>
-                    {info.min !== undefined ? (
-                      <p className="text-[var(--text-secondary)] text-xs">
-                        Min: <span className="text-[#f78166]">{info.min}</span> •
-                        Max: <span className="text-[#f78166]">{info.max}</span> •
-                        Avg: <span className="text-[#f78166]">{info.mean}</span>
-                      </p>
-                    ) : (
-                      <p className="text-[var(--text-secondary)] text-xs">
-                        Top: {Object.keys(info.top_values || {}).join(", ")}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {insights && (
-            <div className="bg-[var(--bg-panel)] border border-[#bc8cff]/30 rounded-2xl p-6">
-              <p className="text-[#bc8cff] font-semibold mb-4">🔮 Executive Business Insights</p>
-              <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
-                {insights.executive_summary}
-              </div>
-            </div>
-          )}
-
-          {recommendations && (
-            <div className="bg-[var(--bg-panel)] border border-[#58a6ff]/30 rounded-2xl p-6">
-              <p className="text-[#58a6ff] font-semibold mb-4">💡 AI Business Recommendations</p>
-              <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
-                {recommendations.recommendations}
-              </div>
-            </div>
-          )}
-
-          {/* SQL Generator */}
-          <div className="bg-[#161b22] border border-[#58a6ff]/30 rounded-2xl p-4">
-            <p className="text-[#58a6ff] font-semibold mb-3">🔷 AI SQL Generator</p>
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={sqlQuestion}
-                onChange={(e) => setSqlQuestion(e.target.value)}
-                placeholder="Ask a question to generate SQL..."
-                className="flex-1 bg-[#0d0d0d] border border-[#30363d] rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-[#58a6ff] transition-all"
-              />
-              <button
-                onClick={handleSQL}
-                disabled={sqlLoading}
-                className="bg-[#58a6ff]/20 border border-[#58a6ff]/30 text-[#58a6ff] px-4 py-2 rounded-xl text-xs hover:bg-[#58a6ff]/30 transition-all disabled:opacity-50"
-              >
-                {sqlLoading ? "..." : "Generate"}
-              </button>
-            </div>
-            {sqlResult && (
-              <div className="bg-[#0d0d0d] rounded-xl p-3">
-                <p className="text-gray-300 text-xs leading-relaxed whitespace-pre-wrap">{sqlResult.ai_response}</p>
-                {sqlResult.executed_result && (
-                  <div className="mt-3 pt-3 border-t border-[#30363d]">
-                    <p className="text-[#58a6ff] text-xs font-medium mb-1">⚡ Executed Result:</p>
-                    <p className="text-gray-300 text-xs font-mono whitespace-pre">{JSON.stringify(sqlResult.executed_result, null, 2)}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Industry Intelligence */}
-          {industryLoading && <IndustryLoader industry={detectedIndustry} />}
-          {industry && !industryLoading && (
-            <div className="bg-[#161b22] border border-[#bc8cff]/30 rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-2xl">
-                  {industry.detected_industry === "retail" ? "🛒"
-                  : industry.detected_industry === "finance" ? "💰"
-                  : industry.detected_industry === "healthcare" ? "🏥"
-                  : industry.detected_industry === "hr" ? "👥"
-                  : industry.detected_industry === "marketing" ? "📱"
-                  : industry.detected_industry === "manufacturing" ? "🏭"
-                  : "🔮"}
-                </span>
-                <div>
-                  <p className="text-[#bc8cff] font-semibold">{industry.industry_display} Intelligence</p>
-                  <p className="text-gray-500 text-xs">Industry auto-detected • {industry.records_analyzed} records analyzed</p>
+                  ))}
                 </div>
               </div>
-              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                {industry.intelligence}
+            )}
+
+            {insights && (
+              <div style={cardStyle("rgba(188,140,255,0.2)")}>
+                <p style={{ color: "#bc8cff", fontWeight: 600, margin: "0 0 10px 0" }}>🔮 Executive Insights</p>
+                <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{insights.executive_summary}</p>
               </div>
+            )}
+
+            {recommendations && (
+              <div style={cardStyle("rgba(88,166,255,0.2)")}>
+                <p style={{ color: "#58a6ff", fontWeight: 600, margin: "0 0 10px 0" }}>💡 AI Recommendations</p>
+                <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{recommendations.recommendations}</p>
+              </div>
+            )}
+
+            {dataQuality && (
+              <div style={cardStyle("rgba(63,185,80,0.2)")}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <p style={{ color: "#3fb950", fontWeight: 600, margin: 0 }}>🧹 Data Quality</p>
+                  <span style={{ color: "#3fb950", fontSize: 12 }}>Score: {dataQuality.quality_score}%</span>
+                </div>
+                {dataQuality.issues?.map((issue, i) => (
+                  <p key={i} style={{ color: "#9CA3AF", fontSize: 12, background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "6px 10px", margin: "0 0 4px 0" }}>{issue}</p>
+                ))}
+                <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.6, margin: "10px 0 0 0", whiteSpace: "pre-wrap" }}>{dataQuality.ai_summary}</p>
+              </div>
+            )}
+
+            {rootCause && (
+              <div style={cardStyle("rgba(255,123,114,0.2)")}>
+                <p style={{ color: "#ff7b72", fontWeight: 600, margin: "0 0 10px 0" }}>🔍 Root Cause Analysis</p>
+                {rootCause.findings?.map((f, i) => (
+                  <p key={i} style={{ color: "#9CA3AF", fontSize: 12, background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "6px 10px", margin: "0 0 4px 0" }}>{f}</p>
+                ))}
+                <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.6, margin: "10px 0 0 0", whiteSpace: "pre-wrap" }}>{rootCause.ai_root_cause_analysis}</p>
+              </div>
+            )}
+
+            {/* SQL Generator */}
+            <div style={cardStyle("rgba(88,166,255,0.2)")}>
+              <p style={{ color: "#58a6ff", fontWeight: 600, margin: "0 0 10px 0" }}>🔷 AI SQL Generator</p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <input
+                  value={sqlQuestion}
+                  onChange={e => setSqlQuestion(e.target.value)}
+                  placeholder="Ask a question..."
+                  style={{
+                    flex: 1, padding: "8px 12px", borderRadius: 10, fontSize: 13,
+                    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#E5E7EB", outline: "none", fontFamily: "Inter, sans-serif",
+                  }}
+                />
+                <button onClick={handleSQL} disabled={sqlLoading}
+                  style={{ ...btnStyle("#58a6ff"), flex: "none", padding: "8px 16px" }}>
+                  {sqlLoading ? "..." : "Generate"}
+                </button>
+              </div>
+              {sqlResult && (
+                <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px 12px" }}>
+                  <p style={{ color: "#9CA3AF", fontSize: 12, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{sqlResult.ai_response}</p>
+                  {sqlResult.executed_result && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                      <p style={{ color: "#58a6ff", fontSize: 11, fontWeight: 600, margin: "0 0 4px 0" }}>⚡ Result:</p>
+                      <p style={{ color: "#9CA3AF", fontSize: 11, fontFamily: "monospace", margin: 0 }}>{JSON.stringify(sqlResult.executed_result, null, 2)}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            {consultant && (
+              <div style={cardStyle("rgba(255,166,87,0.2)")}>
+                <p style={{ color: "#ffa657", fontWeight: 600, margin: "0 0 10px 0" }}>👔 AI Business Consultant</p>
+                <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{consultant.consultation}</p>
+              </div>
+            )}
+
+            {industryLoading && <IndustryLoader industry={detectedIndustry} />}
+            {industry && !industryLoading && (
+              <div style={cardStyle("rgba(188,140,255,0.2)")}>
+                <p style={{ color: "#bc8cff", fontWeight: 600, margin: "0 0 10px 0" }}>
+                  🏭 {industry.industry_display} Intelligence
+                  <span style={{ color: "#6B7280", fontWeight: 400, fontSize: 11, marginLeft: 8 }}>
+                    · {industry.records_analyzed} records
+                  </span>
+                </p>
+                <p style={{ color: "#9CA3AF", fontSize: 13, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{industry.intelligence}</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </motion.div>
     </div>
   );
 }
 
 // ── Forecast Tool ────────────────────────────────────────
 function ForecastTool({ headers }) {
-  const { showToast } = useToast();
   const [file, setFile] = useState(null);
   const [dateCol, setDateCol] = useState("date");
   const [valueCol, setValueCol] = useState("sales");
@@ -722,108 +1084,69 @@ function ForecastTool({ headers }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { showToast } = useToast();
 
   const handleForecast = async () => {
-    if (!file) return;
-    setLoading(true);
-    setError("");
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("date_col", dateCol);
-    formData.append("value_col", valueCol);
-    formData.append("periods", periods);
+    if (!file) return; setLoading(true); setError("");
+    const f = new FormData();
+    f.append("file", file); f.append("date_col", dateCol);
+    f.append("value_col", valueCol); f.append("periods", periods);
     try {
-      const res = await axios.post(`${API}/forecast`, formData, { headers });
-      setResult(res.data);
-      showToast("Forecast completed!", "success");
-    } catch (e) {
-      const msg = e.response?.data?.detail || "Forecast failed";
-      setError(msg);
-      showToast(msg, "error");
-    }
+      const res = await axios.post(`${API}/forecast`, f, { headers });
+      setResult(res.data); showToast("📈 Forecast complete!", "success");
+    } catch (e) { setError(e.response?.data?.detail || "Forecast failed"); }
     setLoading(false);
   };
 
   return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📈 Forecasting</h2>
-      <p className="text-[var(--text-secondary)] mb-6">Predict future values from your time-series data</p>
-
-      <div className="space-y-4 mb-6">
-        <div>
-          <label className="text-[var(--text-secondary)] text-sm mb-2 block">Upload File</label>
-          <input
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={(e) => setFile(e.target.files[0])}
-            className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-sm"
-          />
-        </div>
-        <div className="grid grid-cols-3 gap-3">
+    <div style={{ flex: 1, padding: 24, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+      <h2 style={{ color: "#FFFFFF", fontSize: 22, fontWeight: 700, margin: "0 0 4px 0" }}>📈 Forecasting</h2>
+      <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px 0" }}>Predict future values with Prophet AI</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+        <input type="file" accept=".csv,.xlsx" onChange={e => setFile(e.target.files[0])}
+          style={{ padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#9CA3AF", fontSize: 13 }} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          {[["Date Column", dateCol, setDateCol], ["Value Column", valueCol, setValueCol]].map(([label, val, setter]) => (
+            <div key={label}>
+              <p style={{ color: "#6B7280", fontSize: 11, margin: "0 0 4px 0" }}>{label}</p>
+              <input value={val} onChange={e => setter(e.target.value)}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#E5E7EB", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          ))}
           <div>
-            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Date Column</label>
-            <input
-              value={dateCol}
-              onChange={(e) => setDateCol(e.target.value)}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
-            />
-          </div>
-          <div>
-            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Value Column</label>
-            <input
-              value={valueCol}
-              onChange={(e) => setValueCol(e.target.value)}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
-            />
-          </div>
-          <div>
-            <label className="text-[var(--text-secondary)] text-xs mb-1 block">Periods</label>
-            <input
-              type="number"
-              value={periods}
-              onChange={(e) => setPeriods(e.target.value)}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#f78166]"
-            />
+            <p style={{ color: "#6B7280", fontSize: 11, margin: "0 0 4px 0" }}>Periods</p>
+            <input type="number" value={periods} onChange={e => setPeriods(e.target.value)}
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#E5E7EB", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
           </div>
         </div>
       </div>
-      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+      {error && <p style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</p>}
       <button onClick={handleForecast} disabled={!file || loading}
-        className="w-full bg-[#f78166] hover:bg-[#e06b52] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all mb-6">
+        style={{ width: "100%", padding: "13px", borderRadius: 14, background: "linear-gradient(135deg, #1e3a5f, #3B82F6)", border: "1px solid rgba(125,211,252,0.25)", color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 20, opacity: !file || loading ? 0.5 : 1 }}>
         {loading ? "Running Forecast..." : "Run Forecast 📈"}
       </button>
       {result && (
-        <div className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-6">
-          <p className="text-green-400 font-medium mb-4">
-            ✅ Forecast completed! {result.periods_forecasted} periods predicted.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[var(--border-color)]">
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Date</th>
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Predicted</th>
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Lower</th>
-                  <th className="text-[var(--text-tertiary)] text-left py-2">Upper</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.forecast?.slice(0, 10).map((row, i) => (
-                  <tr key={i} className="border-b border-[var(--border-color)]/50">
-                    <td className="text-[var(--text-secondary)] py-2">{row.ds}</td>
-                    <td className="text-[#f78166] py-2">{Math.round(row.yhat).toLocaleString()}</td>
-                    <td className="text-[var(--text-tertiary)] py-2">{Math.round(row.yhat_lower).toLocaleString()}</td>
-                    <td className="text-[var(--text-tertiary)] py-2">{Math.round(row.yhat_upper).toLocaleString()}</td>
-                  </tr>
+        <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, padding: 20 }}>
+          <p style={{ color: "#22c55e", fontWeight: 600, margin: "0 0 14px 0" }}>✅ {result.periods_forecasted} periods predicted</p>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                {["Date", "Predicted", "Lower", "Upper"].map(h => (
+                  <th key={h} style={{ color: "#6B7280", textAlign: "left", padding: "6px 10px", fontWeight: 500 }}>{h}</th>
                 ))}
-              </tbody>
-            </table>
-            {result.forecast?.length > 10 && (
-              <p className="text-[var(--text-tertiary)] text-xs mt-2">
-                Showing 10 of {result.forecast.length} predictions
-              </p>
-            )}
-          </div>
+              </tr>
+            </thead>
+            <tbody>
+              {result.forecast?.slice(0, 10).map((row, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <td style={{ color: "#9CA3AF", padding: "7px 10px" }}>{row.ds}</td>
+                  <td style={{ color: "#3B82F6", padding: "7px 10px", fontWeight: 600 }}>{Math.round(row.yhat).toLocaleString()}</td>
+                  <td style={{ color: "#4B5563", padding: "7px 10px" }}>{Math.round(row.yhat_lower).toLocaleString()}</td>
+                  <td style={{ color: "#4B5563", padding: "7px 10px" }}>{Math.round(row.yhat_upper).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -837,45 +1160,39 @@ function FilesTool({ headers, setFileId, setActiveTool }) {
   const { showToast } = useToast();
 
   const loadFiles = async () => {
-    try {
-      const res = await axios.get(`${API}/files`, { headers });
-      setFiles(res.data);
-      setLoaded(true);
-    } catch {
-      setLoaded(true);
-      showToast("Failed to load files.", "error");
-    }
+    try { const res = await axios.get(`${API}/files`, { headers }); setFiles(res.data); setLoaded(true); }
+    catch { setLoaded(true); }
   };
 
   if (!loaded) loadFiles();
 
   return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">🗂️ My Files</h2>
-      <p className="text-[var(--text-secondary)] mb-6">All files you have uploaded</p>
-
+    <div style={{ flex: 1, padding: 24, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+      <h2 style={{ color: "#FFFFFF", fontSize: 22, fontWeight: 700, margin: "0 0 4px 0" }}>🗂️ My Files</h2>
+      <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px 0" }}>All your uploaded datasets</p>
       {files.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-5xl mb-4 animate-bounce">📂</p>
-          <p className="text-[var(--text-secondary)]">No files uploaded yet</p>
+        <div style={{ textAlign: "center", padding: "60px 0" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
+          <p style={{ color: "#6B7280" }}>No files uploaded yet</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {files.map((f, i) => (
-            <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[var(--text-primary)] font-medium text-sm">📄 {f.filename}</p>
-                <button
-                  onClick={() => { setFileId(f._id); setActiveTool("chat"); showToast(`Chatting with ${f.filename}`, "info"); }}
-                  className="text-[#f78166] text-xs hover:underline"
-                >Chat with this →</button>
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <p style={{ color: "#E5E7EB", fontWeight: 600, fontSize: 13, margin: 0 }}>📄 {f.filename}</p>
+                <button onClick={() => { setFileId(f._id); setActiveTool("chat"); showToast(`💬 Chatting with ${f.filename}`, "info"); }}
+                  style={{ background: "none", border: "none", color: "#3B82F6", fontSize: 12, cursor: "pointer" }}>
+                  Chat with this →
+                </button>
               </div>
-              <div className="flex gap-4 text-xs text-[var(--text-tertiary)]">
-                <span>📊 {f.rows} rows</span>
-                <span>🗂️ {f.columns?.join(", ")}</span>
+              <div style={{ display: "flex", gap: 12 }}>
+                <span style={{ color: "#6B7280", fontSize: 11 }}>📊 {f.rows} rows</span>
+                <span style={{ color: "#6B7280", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🗂️ {f.columns?.join(", ")}</span>
               </div>
-              <p className="text-[var(--text-quaternary)] font-mono text-xs mt-2 truncate">ID: {f._id}</p>
-            </div>
+              <p style={{ color: "#374151", fontSize: 10, fontFamily: "monospace", margin: "6px 0 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>ID: {f._id}</p>
+            </motion.div>
           ))}
         </div>
       )}
@@ -889,287 +1206,35 @@ function HistoryTool({ headers }) {
   const [loaded, setLoaded] = useState(false);
 
   const loadHistory = async () => {
-    try {
-      const res = await axios.get(`${API}/query-history`, { headers });
-      setHistory(res.data);
-      setLoaded(true);
-    } catch {
-      setLoaded(true);
-    }
+    try { const res = await axios.get(`${API}/query-history`, { headers }); setHistory(res.data); setLoaded(true); }
+    catch { setLoaded(true); }
   };
 
   if (!loaded) loadHistory();
 
   return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">📜 Query History</h2>
-      <p className="text-[var(--text-secondary)] mb-6">Your past questions and answers</p>
-
+    <div style={{ flex: 1, padding: 24, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+      <h2 style={{ color: "#FFFFFF", fontSize: 22, fontWeight: 700, margin: "0 0 4px 0" }}>📜 Query History</h2>
+      <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px 0" }}>Your past questions and answers</p>
       {history.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-5xl mb-4 animate-bounce">📜</p>
-          <p className="text-[var(--text-secondary)]">No queries yet</p>
+        <div style={{ textAlign: "center", padding: "60px 0" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📜</div>
+          <p style={{ color: "#6B7280" }}>No queries yet</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {history.map((h, i) => (
-            <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-2xl p-4">
-              <p className="text-[#f78166] text-sm font-medium mb-2">❓ {h.question}</p>
-              <p className="text-[var(--text-secondary)] text-xs leading-relaxed line-clamp-3">{h.answer}</p>
-            </div>
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "14px 16px" }}>
+              <p style={{ color: "#3B82F6", fontSize: 13, fontWeight: 600, margin: "0 0 8px 0" }}>❓ {h.question}</p>
+              <p style={{ color: "#9CA3AF", fontSize: 12, lineHeight: 1.5, margin: 0,
+                overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+                {h.answer}
+              </p>
+            </motion.div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Consultant Tool ───────────────────────────────────────
-function ConsultantTool({ headers }) {
-  const { showToast } = useToast();
-  const [file, setFile] = useState(null);
-  const [dragActive, setDragActive] = useState(false);
-  const [consultant, setConsultant] = useState(null);
-  const [consultantLoading, setConsultantLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragActive(false);
-    const dropped = e.dataTransfer.files?.[0];
-    if (dropped) {
-      setFile(dropped);
-      setConsultant(null);
-      showToast(`"${dropped.name}" ready to analyze`, "info");
-    }
-  };
-
-  const handleConsultant = async () => {
-    if (!file) return;
-    setConsultantLoading(true);
-    setError("");
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await axios.post(`${API}/business-consultant`, formData, { headers });
-      setConsultant(res.data);
-      showToast("👔 Business consultation complete!", "success");
-    } catch (e) {
-      const msg = e.response?.data?.detail || "Business consultation failed";
-      setError(msg);
-      showToast(msg, "error");
-    }
-    setConsultantLoading(false);
-  };
-
-  return (
-    <div className="flex-1 p-8 max-w-2xl mx-auto w-full overflow-y-auto">
-      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">👔 AI Business Consultant</h2>
-      <p className="text-[var(--text-secondary)] mb-4">
-        Upload your data and get expert-level business advice, risks, and strategic recommendations
-      </p>
-
-      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2 mb-6">
-        <span>🔒</span>
-        <p className="text-green-400 text-xs">Your data is encrypted and private — we never share or sell your files</p>
-      </div>
-
-      {!consultantLoading && (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all mb-4 ${
-            dragActive ? "border-[#ffa657] bg-[#ffa657]/5 scale-[1.01]" : "border-[var(--border-color)] hover:border-[#ffa657]/50"
-          }`}
-        >
-          <div className="text-5xl mb-4">{dragActive ? "📥" : "👔"}</div>
-          <p className="text-[var(--text-secondary)] mb-4">
-            {dragActive ? "Drop it right here!" : "Drop your file here or click to browse"}
-          </p>
-          <input
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={(e) => {
-              setFile(e.target.files[0]);
-              setConsultant(null);
-              showToast(`"${e.target.files[0].name}" selected`, "info");
-            }}
-            className="hidden"
-            id="consultantFileInput"
-          />
-          <label
-            htmlFor="consultantFileInput"
-            className="bg-[var(--bg-panel-alt)] border border-[var(--border-color)] text-[var(--text-secondary)] px-6 py-2 rounded-xl cursor-pointer hover:border-[#ffa657]/50 transition-all text-sm"
-          >
-            Choose File
-          </label>
-          {file && <p className="text-[#ffa657] mt-3 text-sm">✅ {file.name}</p>}
-        </div>
-      )}
-
-      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-
-      {!consultantLoading && (
-        <button
-          onClick={handleConsultant}
-          disabled={!file}
-          className="w-full bg-[#ffa657] hover:bg-[#e6944e] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all"
-        >
-          Get Business Consultation 👔
-        </button>
-      )}
-
-      {consultantLoading && <ConsultantLoader fileName={file?.name} />}
-
-      {consultant && !consultantLoading && (
-        <ConsultantResult consultation={consultant.consultation} />
-      )}
-    </div>
-  );
-}
-
-// ── Consultant Loading Animation ─────────────────────────
-function ConsultantLoader({ fileName }) {
-  const stages = [
-    { icon: "📂", label: "Reading your data" },
-    { icon: "🧮", label: "Crunching the numbers" },
-    { icon: "📊", label: "Spotting trends & risks" },
-    { icon: "💼", label: "Weighing strategic options" },
-    { icon: "✍️", label: "Drafting recommendations" },
-    { icon: "✨", label: "Polishing the final report" },
-  ];
-  const [stageIndex, setStageIndex] = useState(0);
-  const [progress, setProgress] = useState(4);
-
-  useEffect(() => {
-    const stageTimer = setInterval(() => {
-      setStageIndex((i) => (i + 1 < stages.length ? i + 1 : i));
-    }, 2400);
-
-    // progress creeps up but never quite hits 100 until real data arrives
-    const progressTimer = setInterval(() => {
-      setProgress((p) => (p < 92 ? p + (92 - p) * 0.08 + 0.5 : p));
-    }, 200);
-
-    return () => {
-      clearInterval(stageTimer);
-      clearInterval(progressTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div className="bg-[var(--bg-panel)] border border-[#ffa657]/30 rounded-2xl p-8">
-      <style>{`
-        @keyframes consult-orbit { to { transform: rotate(360deg); } }
-        @keyframes consult-pulse {
-          0%, 100% { box-shadow: 0 0 10px 2px rgba(255,166,87,0.35); }
-          50% { box-shadow: 0 0 22px 8px rgba(255,166,87,0.55); }
-        }
-        @keyframes consult-fade-up {
-          0% { opacity: 0; transform: translateY(6px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes consult-bounce-dot {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-          40% { transform: scale(1); opacity: 1; }
-        }
-        .consult-ring { animation: consult-orbit 1.4s linear infinite; }
-        .consult-orb { animation: consult-pulse 1.8s ease-in-out infinite; }
-        .consult-stage { animation: consult-fade-up 0.4s ease-out; }
-        .consult-dot { animation: consult-bounce-dot 1.2s ease-in-out infinite; }
-      `}</style>
-
-      {/* Orbiting icon */}
-      <div className="flex flex-col items-center mb-6">
-        <div className="relative w-16 h-16 flex items-center justify-center mb-4">
-          <div
-            className="consult-ring absolute inset-0 rounded-full"
-            style={{
-              background: "conic-gradient(from 0deg, #ffa657, #f78166, #bc8cff, #ffa657)",
-              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0)",
-              mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0)",
-            }}
-          />
-          <div className="consult-orb w-11 h-11 rounded-full bg-[var(--bg-app)] flex items-center justify-center text-2xl">
-            {stages[stageIndex].icon}
-          </div>
-        </div>
-
-        <p key={stageIndex} className="consult-stage text-[var(--text-primary)] font-medium text-sm mb-1">
-          {stages[stageIndex].label}
-          <span className="inline-flex gap-0.5 ml-1 align-middle">
-            <span className="consult-dot w-1 h-1 rounded-full bg-[var(--text-primary)] inline-block" style={{ animationDelay: "0s" }} />
-            <span className="consult-dot w-1 h-1 rounded-full bg-[var(--text-primary)] inline-block ml-0.5" style={{ animationDelay: "0.2s" }} />
-            <span className="consult-dot w-1 h-1 rounded-full bg-[var(--text-primary)] inline-block ml-0.5" style={{ animationDelay: "0.4s" }} />
-          </span>
-        </p>
-        {fileName && (
-          <p className="text-[var(--text-tertiary)] text-xs">analyzing {fileName}</p>
-        )}
-      </div>
-
-      {/* Progress bar */}
-      <div className="w-full bg-[var(--bg-panel-alt)] rounded-full h-2 overflow-hidden mb-3">
-        <div
-          className="h-full rounded-full transition-all duration-300 ease-out"
-          style={{
-            width: `${Math.min(progress, 96)}%`,
-            background: "linear-gradient(90deg, #ffa657, #f78166, #bc8cff)",
-          }}
-        />
-      </div>
-
-      {/* Stage checklist */}
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        {stages.map((s, i) => (
-          <div
-            key={i}
-            className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg transition-all ${
-              i < stageIndex
-                ? "text-green-400"
-                : i === stageIndex
-                ? "text-[#ffa657] bg-[#ffa657]/10"
-                : "text-[var(--text-quaternary)]"
-            }`}
-          >
-            <span>{i < stageIndex ? "✅" : s.icon}</span>
-            <span className="truncate">{s.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <p className="text-center text-[var(--text-tertiary)] text-xs mt-5">
-        Good advice takes a moment — your consultant is being thorough 🧠
-      </p>
-    </div>
-  );
-}
-
-// ── Consultant Result (animated reveal) ──────────────────
-function ConsultantResult({ consultation }) {
-  return (
-    <div className="mt-6">
-      <style>{`
-        @keyframes consult-result-in {
-          0% { opacity: 0; transform: translateY(12px) scale(0.98); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .consult-result { animation: consult-result-in 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-      `}</style>
-      <div className="consult-result bg-[var(--bg-panel)] border border-[#ffa657]/30 rounded-2xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xl">👔</span>
-          <p className="text-[#ffa657] font-semibold">AI Business Consultation</p>
-          <span className="text-green-400 text-xs bg-green-500/10 px-2 py-0.5 rounded-full ml-auto">
-            ✅ Ready
-          </span>
-        </div>
-        <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">
-          {consultation}
-        </div>
-      </div>
     </div>
   );
 }

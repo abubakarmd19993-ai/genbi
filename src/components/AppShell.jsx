@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { id: "upload", icon: Upload, label: "Upload Data", desc: "Import CSV or Excel files", badge: null },
   { id: "dashboard", icon: LayoutDashboard, label: "My Stats", desc: "View your activity", badge: null },
   { id: "youtube", icon: Brain, label: "YouTube Notes", desc: "YouTube → Study PDF", badge: "New" },
+  { id: "simulator", icon: Sparkles, label: "AI Simulator", desc: "What-If Business Simulator", badge: "New" },
   { id: "autodashboard", icon: BarChart3, label: "Auto Dashboard", desc: "Generate dashboards instantly", badge: "New" },
   { id: "forecast", icon: TrendingUp, label: "Forecasting", desc: "Predict future trends", badge: "●" },
   { id: "pdfchat", icon: FileText, label: "PDF Chat", desc: "Chat with any PDF", badge: "New" },

@@ -725,14 +725,44 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
   const [isDragging, setIsDragging] = useState(false);
   const { showToast } = useToast();
 
-  const handleUpload = async () => {
+const handleUpload = async () => {
     if (!file) return;
     setLoading(true); setError("");
+
+    // Auto-detect industry from filename + column names
+    const filename = file.name.toLowerCase();
+    let autoIndustry = "general";
+    if (filename.includes("hotel") || filename.includes("hospitality") || filename.includes("room") || filename.includes("booking")) autoIndustry = "hotel";
+    else if (filename.includes("hospital") || filename.includes("patient") || filename.includes("health") || filename.includes("medical")) autoIndustry = "healthcare";
+    else if (filename.includes("loan") || filename.includes("bank") || filename.includes("finance") || filename.includes("credit")) autoIndustry = "finance";
+    else if (filename.includes("retail") || filename.includes("sales") || filename.includes("product") || filename.includes("store")) autoIndustry = "retail";
+    else if (filename.includes("employee") || filename.includes("hr") || filename.includes("salary") || filename.includes("attrition")) autoIndustry = "hr";
+    else if (filename.includes("marketing") || filename.includes("campaign") || filename.includes("ads") || filename.includes("click")) autoIndustry = "marketing";
+    else if (filename.includes("manufacturing") || filename.includes("production") || filename.includes("factory")) autoIndustry = "manufacturing";
+    else if (filename.includes("logistics") || filename.includes("delivery") || filename.includes("shipment")) autoIndustry = "logistics";
+    else if (filename.includes("real") || filename.includes("property") || filename.includes("estate")) autoIndustry = "realestate";
+    else if (filename.includes("flight") || filename.includes("aviation") || filename.includes("airline")) autoIndustry = "aviation";
+    else if (filename.includes("student") || filename.includes("education") || filename.includes("school")) autoIndustry = "education";
+    else if (filename.includes("order") || filename.includes("ecommerce") || filename.includes("cart")) autoIndustry = "ecommerce";
+
+    setDetectedIndustry(autoIndustry);
+
     const formData = new FormData();
     formData.append("file", file);
     try {
       const res = await axios.post(`${API}/upload`, formData, { headers });
       setResult(res.data); setFileId(res.data.file_id);
+
+      // Also detect from columns
+      const columns = res.data.columns?.join(" ").toLowerCase() || "";
+      if (columns.includes("patient") || columns.includes("diagnosis")) setDetectedIndustry("healthcare");
+      else if (columns.includes("loan") || columns.includes("interest") || columns.includes("credit")) setDetectedIndustry("finance");
+      else if (columns.includes("employee") || columns.includes("salary") || columns.includes("attrition")) setDetectedIndustry("hr");
+      else if (columns.includes("room") || columns.includes("occupancy") || columns.includes("checkin")) setDetectedIndustry("hotel");
+      else if (columns.includes("product") || columns.includes("category") || columns.includes("sales")) setDetectedIndustry("retail");
+      else if (columns.includes("campaign") || columns.includes("clicks") || columns.includes("impressions")) setDetectedIndustry("marketing");
+      else if (columns.includes("flight") || columns.includes("airline") || columns.includes("departure")) setDetectedIndustry("aviation");
+
       showToast(`✅ ${res.data.filename} uploaded!`, "success");
     } catch (e) {
       setError(e.response?.data?.detail || "Upload failed");
@@ -884,7 +914,20 @@ function UploadTool({ headers, setFileId, setActiveTool }) {
           {file && <p style={{ color: "#3B82F6", marginTop: 12, fontSize: 13 }}>✅ {file.name}</p>}
         </motion.div>
 
-        {error && <p style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+       {error && <p style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              style={{ marginBottom: 12, overflow: "hidden" }}
+            >
+              <IndustryLoader industry={detectedIndustry} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <motion.button
           onClick={handleUpload}

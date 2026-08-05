@@ -1,3 +1,4 @@
+from backend.app.youtube_notes import generate_youtube_notes
 from backend.app.industry_intelligence import generate_industry_intelligence
 from backend.app.business_consultant import business_consultant_analysis
 from backend.app.sql_generator import generate_sql
@@ -213,8 +214,24 @@ async def industry_intelligence(
         "generated_by": current_user,
         **result
     }
-
-
+@router.post("/youtube-notes")
+async def youtube_notes(
+    video_url: str,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        pdf_bytes, notes_text = generate_youtube_notes(video_url, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=GenBI_StudyNotes.pdf"
+        }
+    )
 @router.post("/dashboard")
 async def create_dashboard(
     file: UploadFile = File(...),

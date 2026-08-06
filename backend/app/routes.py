@@ -1,3 +1,5 @@
+from backend.app.pdf_translator import translate_pdf, SUPPORTED_LANGUAGES
+from backend.app.ocr_tool import process_ocr
 from backend.app.pdf_chat import ingest_pdf, query_pdf, get_pdf_summary
 from backend.app.youtube_notes import generate_youtube_notes
 from backend.app.industry_intelligence import generate_industry_intelligence
@@ -271,7 +273,27 @@ async def upload_pdf(
 class PDFQueryRequest(BaseModel):
     question: str
     file_id: str
-
+@router.post("/ocr")
+async def ocr_image(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp")):
+        raise HTTPException(status_code=400, detail="Only image files allowed (JPG, PNG, BMP, TIFF, WEBP)")
+    contents = await file.read()
+    try:
+        docx_bytes, raw_text, cleaned_text = process_ocr(contents, file.filename, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f"attachment; filename=GenBI_OCR_{file.filename}.docx"
+        }
+    )
 
 @router.post("/query-pdf")
 async def query_pdf_endpoint(
@@ -294,6 +316,57 @@ async def query_pdf_endpoint(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+@router.post("/translate-pdf")
+async def translate_pdf_endpoint(
+    file: UploadFile = File(...),
+    target_language: str = "french",
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files allowed")
+    contents = await file.read()
+
+    # Languages that work well with PDF (Latin script)
+    latin_languages = ["french", "german", "spanish", "portuguese", "italian"]
+
+    try:
+        pdf_bytes, page_count = translate_pdf(
+            contents, file.filename, target_language, current_user
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if target_language.lower() in latin_languages:
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=GenBI_Translated_{target_language}_{file.filename}"
+            }
+        )
+    else:
+        # For Arabic, Hindi, Telugu etc — return as text file
+        from backend.app.pdf_translator import extract_pdf_text, translate_text, SUPPORTED_LANGUAGES
+        pages_text, _ = extract_pdf_text(contents)
+        full_translation = ""
+        for page in pages_text:
+            full_translation += f"\n--- Page {page['page']} ---\n"
+            full_translation += translate_text(page["text"], target_language)
+            full_translation += "\n"
+
+        return Response(
+            content=full_translation.encode("utf-8"),
+            media_type="text/plain; charset=utf-8",
+            headers={
+                "Content-Disposition": f"attachment; filename=GenBI_Translated_{target_language}_{file.filename}.txt"
+            }
+        )
+
+@router.get("/supported-languages")
+async def get_supported_languages():
+    return {"languages": SUPPORTED_LANGUAGES}
 
 @router.post("/dashboard")
 async def create_dashboard(

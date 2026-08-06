@@ -1,3 +1,4 @@
+import PDFTranslatorTool from "./PDFTranslatorTool";
 import DecisionStudio from "./DecisionStudio";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -519,6 +520,8 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   if (activeTool === "youtube") return <YouTubeTool headers={headers} />;
   if (activeTool === "pdfchat") return <PDFChatTool />;
   if (activeTool === "simulator") return <DecisionStudio />;
+  if (activeTool === "ocr") return <OCRTool />;
+  if (activeTool === "translator") return <PDFTranslatorTool />;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", overflow: "hidden" }}>

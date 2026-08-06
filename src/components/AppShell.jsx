@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { id: "history", icon: History, label: "History", desc: "View past queries", badge: null },
   { id: "files", icon: FolderOpen, label: "My Files", desc: "Manage uploaded files", badge: null },
   { id: "embed", icon: Brain, label: "Embedder", desc: "Convert files to embeddings", badge: null },
+  { id: "translator", icon: FileText, label: "PDF Translator", desc: "Translate PDF to any language", badge: "New" },
 ];
 
 // ── Tooltip ───────────────────────────────────────────────

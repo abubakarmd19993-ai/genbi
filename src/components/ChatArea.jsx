@@ -1,3 +1,4 @@
+import InvoiceReaderTool from "./InvoiceReaderTool";
 import PDFTranslatorTool from "./PDFTranslatorTool";
 import DecisionStudio from "./DecisionStudio";
 import { useState, useEffect, useRef } from "react";
@@ -522,6 +523,7 @@ export default function ChatArea({ activeTool, setActiveTool, setChats }) {
   if (activeTool === "simulator") return <DecisionStudio />;
   if (activeTool === "ocr") return <OCRTool />;
   if (activeTool === "translator") return <PDFTranslatorTool />;
+  if (activeTool === "invoice") return <InvoiceReaderTool />;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", overflow: "hidden" }}>

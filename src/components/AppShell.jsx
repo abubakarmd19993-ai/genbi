@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import AnimatedGenBILogo from "./AnimatedGenBILogo";
 import {
   Bot, Upload, LayoutDashboard, TrendingUp, History,
   FolderOpen, Brain, BarChart3, Sparkles, Sun, Moon,
@@ -260,58 +261,12 @@ export default function AppShell({ children, activeTool, onNavigate }) {
           position: "relative", zIndex: 1,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            {/* Spinning orb */}
+            {/* Logo mark */}
             <div style={{ position: "relative", flexShrink: 0, width: 36, height: 36 }}>
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                style={{
-                  position: "absolute", inset: -2, borderRadius: "50%",
-                  background: "conic-gradient(from 0deg, #3B82F6, #7DD3FC, transparent, #3B82F6)",
-                }}
-              />
-              <div style={{
-                position: "absolute", inset: 1, borderRadius: "50%",
-                background: "#0B1120",
-              }} />
-              <motion.div
-                animate={{ scale: [1, 1.08, 1] }}
-                transition={{ duration: 3, repeat: Infinity }}
-                style={{
-                  position: "absolute", inset: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 18, zIndex: 1,
-                }}
-              >
-                🔮
-              </motion.div>
+              <AnimatedGenBILogo size={36} showText={!collapsed} />
             </div>
 
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.div
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                >
-                  <p style={{
-                    margin: 0, fontWeight: 800, fontSize: 15,
-                    background: "linear-gradient(135deg, #FFFFFF 0%, #60A5FA 60%, #7DD3FC 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                  }}>
-                    GenBI AI
-                  </p>
-                  <p style={{
-                    margin: 0, fontSize: 9, color: "#374151",
-                    letterSpacing: "0.12em", textTransform: "uppercase",
-                  }}>
-                    AI Business Intelligence
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+
           </div>
 
           {/* AI Ready */}

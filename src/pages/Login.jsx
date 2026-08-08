@@ -1,3 +1,4 @@
+import AnimatedGenBILogo from "../components/AnimatedGenBILogo";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -236,7 +237,7 @@ export default function Login() {
       {/* Navigation */}
       <nav className="relative flex items-center justify-between px-8 py-4" style={{ zIndex: 10 }}>
         <div className="flex items-center gap-2">
-          <span className="text-2xl">🔮</span>
+          <AnimatedGenBILogo size={36} />
           <span className="font-bold text-white text-lg">GenBI</span>
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(37,99,235,0.2)", border: "1px solid rgba(88,166,255,0.3)", color: "#58a6ff" }}>AI</span>
         </div>
@@ -316,9 +317,8 @@ export default function Login() {
 
         {/* Hero Text */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6"
-            style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(125,211,252,0.2))", border: "1px solid rgba(88,166,255,0.4)", boxShadow: "0 0 50px rgba(37,99,235,0.3)", animation: "pulse-orb 3s ease-in-out infinite" }}>
-            <span className="text-4xl" style={{ filter: "drop-shadow(0 0 10px rgba(88,166,255,0.6))" }}>🔮</span>
+          <div style={{ marginBottom: 16 }}>
+            <AnimatedGenBILogo size={80} />
           </div>
           <h1 className="text-5xl font-bold mb-3"
             style={{ background: "linear-gradient(135deg, #FFFFFF 0%, #60A5FA 50%, #7DD3FC 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", filter: "drop-shadow(0 0 20px rgba(125,211,252,0.5))" }}>

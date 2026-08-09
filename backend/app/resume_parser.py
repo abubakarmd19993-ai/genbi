@@ -172,6 +172,6 @@ def process_resume(contents: bytes, filename: str, username: str) -> dict:
         "processed_at": datetime.now().strftime("%B %d, %Y %H:%M"),
         "resume_data": resume_data,
         "ats_score": ats_score,
-        "raw_text_preview": raw_text[:300]
+        "raw_text_preview": raw_text[:5000]
     }
  

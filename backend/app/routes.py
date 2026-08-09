@@ -1,3 +1,4 @@
+from backend.app.resume_parser import process_resume
 from backend.app.invoice_reader import process_invoice
 from backend.app.pdf_translator import translate_pdf, SUPPORTED_LANGUAGES
 from backend.app.ocr_tool import process_ocr
@@ -402,7 +403,22 @@ async def create_dashboard(
         "generated_by": current_user,
         **result
     }
-
+@router.post("/parse-resume")
+async def parse_resume(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    allowed = (".pdf", ".txt", ".docx")
+    if not file.filename.lower().endswith(allowed):
+        raise HTTPException(status_code=400, detail="Only PDF, TXT and DOCX files allowed")
+    contents = await file.read()
+    try:
+        result = process_resume(contents, file.filename, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
 
 @router.post("/generate-report")
 async def generate_report(

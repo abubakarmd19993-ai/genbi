@@ -1,3 +1,4 @@
+from backend.app.invoice_reader import process_invoice
 from backend.app.pdf_translator import translate_pdf, SUPPORTED_LANGUAGES
 from backend.app.ocr_tool import process_ocr
 from backend.app.pdf_chat import ingest_pdf, query_pdf, get_pdf_summary
@@ -364,6 +365,22 @@ async def translate_pdf_endpoint(
             }
         )
 
+@router.post("/read-invoice")
+async def read_invoice(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    allowed = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp")
+    if not file.filename.lower().endswith(allowed):
+        raise HTTPException(status_code=400, detail="Only PDF and image files allowed")
+    contents = await file.read()
+    try:
+        result = process_invoice(contents, file.filename, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
 @router.get("/supported-languages")
 async def get_supported_languages():
     return {"languages": SUPPORTED_LANGUAGES}

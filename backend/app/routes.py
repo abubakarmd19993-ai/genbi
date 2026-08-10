@@ -1,4 +1,5 @@
-
+from datetime import datetime
+from backend.app.universal_embedder import embed_document, search_knowledge, detect_file_type
 from backend.app.meeting_notes import process_meeting, generate_pdf_report
 from backend.app.resume_parser import process_resume
 from backend.app.doc_chat import ingest_document, query_document
@@ -506,7 +507,69 @@ async def generate_meeting_notes_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@router.post("/embed-document")
+async def embed_document_endpoint(
+    file: UploadFile = File(...),
+    chunk_size: int = 500,
+    chunk_overlap: int = 50,
+    current_user: str = Depends(get_current_user)
+):
+    allowed = (".pdf", ".docx", ".doc", ".txt", ".csv", ".xlsx", ".json", ".md")
+    if not file.filename.lower().endswith(allowed):
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+    contents = await file.read()
+    try:
+        file_meta = {
+            "filename": file.filename,
+            "type": "embedded",
+            "uploaded_by": current_user,
+            "embedded_at": datetime.now().isoformat(),
+        }
+        result = await db.files.insert_one(file_meta)
+        file_id = str(result.inserted_id)
+        embed_result = embed_document(
+            contents, file.filename, file_id,
+            current_user, chunk_size, chunk_overlap
+        )
+        await db.embedded_docs.insert_one({
+            **embed_result,
+            "username": current_user,
+        })
+        return embed_result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+class SearchRequest(BaseModel):
+    query: str
+    collection_name: str
+    top_k: int = 4
+
+
+@router.post("/search-knowledge")
+async def search_knowledge_endpoint(
+    request: SearchRequest,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        result = search_knowledge(request.query, request.collection_name, request.top_k)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/embedded-docs")
+async def get_embedded_docs(current_user: str = Depends(get_current_user)):
+    try:
+        docs = await db.embedded_docs.find(
+            {"username": current_user},
+            {"_id": 0}
+        ).sort("embedded_at", -1).to_list(50)
+        return {"documents": docs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/download-meeting-pdf")
 async def download_meeting_pdf(

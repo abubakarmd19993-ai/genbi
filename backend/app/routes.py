@@ -1,4 +1,5 @@
 
+from backend.app.meeting_notes import process_meeting, generate_pdf_report
 from backend.app.resume_parser import process_resume
 from backend.app.doc_chat import ingest_document, query_document
 from backend.app.invoice_reader import process_invoice
@@ -489,7 +490,38 @@ async def generate_report(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=GenBI_Report_{file.filename}.pdf"}
     )
+@router.post("/generate-meeting-notes")
+async def generate_meeting_notes_endpoint(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    allowed = (".txt", ".pdf", ".docx", ".doc")
+    if not file.filename.lower().endswith(allowed):
+        raise HTTPException(status_code=400, detail="Only TXT, PDF, DOCX files allowed")
+    contents = await file.read()
+    try:
+        result = process_meeting(contents, file.filename, current_user)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/download-meeting-pdf")
+async def download_meeting_pdf(
+    notes: dict,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        pdf_bytes = generate_pdf_report(notes, "meeting_notes.pdf")
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=GenBI_Meeting_Notes.pdf"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/quickstats")
 async def quick_stats(

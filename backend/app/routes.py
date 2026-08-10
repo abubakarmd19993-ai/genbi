@@ -1,4 +1,6 @@
+
 from backend.app.resume_parser import process_resume
+from backend.app.doc_chat import ingest_document, query_document
 from backend.app.invoice_reader import process_invoice
 from backend.app.pdf_translator import translate_pdf, SUPPORTED_LANGUAGES
 from backend.app.ocr_tool import process_ocr
@@ -420,6 +422,56 @@ async def parse_resume(
         raise HTTPException(status_code=500, detail=str(e))
     return result
 
+@router.post("/upload-doc")
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    allowed = (".pdf", ".docx", ".doc", ".pptx", ".ppt", ".txt")
+    if not file.filename.lower().endswith(allowed):
+        raise HTTPException(status_code=400, detail="Supported: PDF, Word, PowerPoint, TXT")
+    contents = await file.read()
+    try:
+        file_meta = {
+            "filename": file.filename,
+            "type": "document",
+            "uploaded_by": current_user
+        }
+        result = await db.files.insert_one(file_meta)
+        file_id = str(result.inserted_id)
+        doc_result = ingest_document(contents, file.filename, file_id)
+        return {
+            "message": "Document uploaded and indexed",
+            "file_id": file_id,
+            "uploaded_by": current_user,
+            **doc_result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class DocQueryRequest(BaseModel):
+    question: str
+    file_id: str
+
+
+@router.post("/query-doc")
+async def query_doc(
+    request: DocQueryRequest,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        result = query_document(request.question, request.file_id)
+        await db.query_history.insert_one({
+            "question": request.question,
+            "answer": result["answer"],
+            "file_id": request.file_id,
+            "type": "document",
+            "asked_by": current_user
+        })
+        return {"message": "Query completed", **result}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 @router.post("/generate-report")
 async def generate_report(
     file: UploadFile = File(...),

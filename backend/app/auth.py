@@ -35,6 +35,16 @@ class UserSignup(BaseModel):
     password: str
     email: str = None
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class VerifyResetTokenRequest(BaseModel):
+    token: str
+
 def hash_password(password: str):
     return pwd_context.hash(password)
 
@@ -87,3 +97,18 @@ async def verify_email(token: str):
 async def resend_verification_email(current_user: str = Depends(get_current_user)):
     from backend.app.email_verification import resend_verification
     return await resend_verification(current_user, db)
+
+@router.post("/forgot-password")
+async def forgot_password_endpoint(request: ForgotPasswordRequest):
+    from backend.app.forgot_password import forgot_password
+    return await forgot_password(request.email, db)
+
+@router.post("/verify-reset-token")
+async def verify_reset_token_endpoint(request: VerifyResetTokenRequest):
+    from backend.app.forgot_password import verify_reset_token
+    return await verify_reset_token(request.token, db)
+
+@router.post("/reset-password")
+async def reset_password_endpoint(request: ResetPasswordRequest):
+    from backend.app.forgot_password import reset_password
+    return await reset_password(request.token, request.new_password, db)

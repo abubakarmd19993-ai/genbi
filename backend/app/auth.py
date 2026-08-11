@@ -18,7 +18,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__trunca
 # JWT config from environment variables
 SECRET_KEY = os.getenv("SECRET_KEY", "genbi-secret-key-change-in-production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", 60))
+TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", 10080))
 
 # Request models
 class UserSignup(BaseModel):

@@ -1,3 +1,4 @@
+from backend.app.profile import get_profile, update_profile, change_password, get_usage_stats, ProfileUpdate, PasswordChange
 from datetime import datetime
 from backend.app.universal_embedder import embed_document, search_knowledge, detect_file_type
 from backend.app.meeting_notes import process_meeting, generate_pdf_report
@@ -369,6 +370,28 @@ async def translate_pdf_endpoint(
                 "Content-Disposition": f"attachment; filename=GenBI_Translated_{target_language}_{file.filename}.txt"
             }
         )
+
+@router.get("/profile")
+async def get_user_profile(current_user: str = Depends(get_current_user)):
+    return await get_profile(current_user, db)
+
+@router.put("/profile")
+async def update_user_profile(
+    data: ProfileUpdate,
+    current_user: str = Depends(get_current_user)
+):
+    return await update_profile(current_user, data, db)
+
+@router.post("/change-password")
+async def change_user_password(
+    data: PasswordChange,
+    current_user: str = Depends(get_current_user)
+):
+    return await change_password(current_user, data, db)
+
+@router.get("/usage-stats")
+async def get_user_stats(current_user: str = Depends(get_current_user)):
+    return await get_usage_stats(current_user, db) 
 
 @router.post("/read-invoice")
 async def read_invoice(

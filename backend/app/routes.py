@@ -1,3 +1,6 @@
+from backend.app.two_factor import setup_2fa, verify_and_enable_2fa, disable_2fa, get_2fa_status
+from backend.app.api_keys import create_api_key, list_api_keys, delete_api_key
+from backend.app.roles import set_user_role, get_user_role, require_admin, get_all_users, get_platform_stats
 from backend.app.profile import get_profile, update_profile, change_password, get_usage_stats, ProfileUpdate, PasswordChange
 from datetime import datetime
 from backend.app.universal_embedder import embed_document, search_knowledge, detect_file_type
@@ -720,3 +723,76 @@ async def get_forecast_history(current_user: str = Depends(get_current_user)):
     for h in history:
         h["_id"] = str(h["_id"])
     return history
+class APIKeyRequest(BaseModel):
+    name: str
+
+@router.post("/api-keys")
+async def create_key(
+    request: APIKeyRequest,
+    current_user: str = Depends(get_current_user)
+):
+    return await create_api_key(current_user, request.name, db)
+
+@router.get("/api-keys")
+async def get_keys(current_user: str = Depends(get_current_user)):
+    return await list_api_keys(current_user, db)
+
+@router.delete("/api-keys/{key_prefix}")
+async def delete_key(
+    key_prefix: str,
+    current_user: str = Depends(get_current_user)
+):
+    return await delete_api_key(current_user, key_prefix, db)
+class RoleRequest(BaseModel):
+    username: str
+    role: str
+
+@router.get("/admin/users")
+async def admin_get_users(current_user: str = Depends(get_current_user)):
+    await require_admin(current_user, db)
+    return await get_all_users(db)
+
+@router.get("/admin/stats")
+async def admin_get_stats(current_user: str = Depends(get_current_user)):
+    await require_admin(current_user, db)
+    return await get_platform_stats(db)
+
+@router.post("/admin/set-role")
+async def admin_set_role(
+    request: RoleRequest,
+    current_user: str = Depends(get_current_user)
+):
+    await require_admin(current_user, db)
+    return await set_user_role(request.username, request.role, db)
+
+@router.get("/my-role")
+async def get_my_role(current_user: str = Depends(get_current_user)):
+    role = await get_user_role(current_user, db)
+    return {"username": current_user, "role": role}
+class TwoFAVerifyRequest(BaseModel):
+    code: str
+
+class TwoFADisableRequest(BaseModel):
+    code: str
+
+@router.get("/2fa/status")
+async def get_2fa_status_endpoint(current_user: str = Depends(get_current_user)):
+    return await get_2fa_status(current_user, db)
+
+@router.post("/2fa/setup")
+async def setup_2fa_endpoint(current_user: str = Depends(get_current_user)):
+    return await setup_2fa(current_user, db)
+
+@router.post("/2fa/verify-enable")
+async def verify_enable_2fa(
+    request: TwoFAVerifyRequest,
+    current_user: str = Depends(get_current_user)
+):
+    return await verify_and_enable_2fa(current_user, request.code, db)
+
+@router.post("/2fa/disable")
+async def disable_2fa_endpoint(
+    request: TwoFADisableRequest,
+    current_user: str = Depends(get_current_user)
+):
+    return await disable_2fa(current_user, request.code, db)

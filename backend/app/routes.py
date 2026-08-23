@@ -1,3 +1,4 @@
+from backend.app.duckdb_engine import register_dataset, execute_query, get_schema_context, quick_analytics, generate_profile
 from backend.app.two_factor import setup_2fa, verify_and_enable_2fa, disable_2fa, get_2fa_status
 from backend.app.api_keys import create_api_key, list_api_keys, delete_api_key
 from backend.app.roles import set_user_role, get_user_role, require_admin, get_all_users, get_platform_stats
@@ -40,6 +41,7 @@ async def upload_file(
     file: UploadFile = File(...),
     current_user: str = Depends(get_current_user)
 ):
+    import numpy as np
     if not file.filename.endswith((".csv", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
     contents = await file.read()
@@ -50,6 +52,11 @@ async def upload_file(
             df = pd.read_csv(io.BytesIO(contents), encoding="latin-1")
     else:
         df = pd.read_excel(io.BytesIO(contents))
+
+    # Fix NaN and infinity values
+    df = df.replace([np.inf, -np.inf], None)
+    df = df.where(pd.notna(df), None)
+
     file_meta = {
         "filename": file.filename,
         "rows": len(df),
@@ -58,15 +65,39 @@ async def upload_file(
     }
     result = await db.files.insert_one(file_meta)
     file_id = str(result.inserted_id)
-    if len(df) > 500:
-        sample_df = df.head(500)
-        sample_contents = sample_df.to_csv(index=False).encode()
-        chunks = await ingest_file(sample_contents, file.filename, file_id)
-        sampled = True
-    else:
-        chunks = await ingest_file(contents, file.filename, file_id)
+
+    try:
+        if len(df) > 500:
+            sample_df = df.head(500)
+            sample_contents = sample_df.to_csv(index=False).encode()
+            chunks = await ingest_file(sample_contents, file.filename, file_id)
+            sampled = True
+        else:
+            chunks = await ingest_file(contents, file.filename, file_id)
+            sampled = False
+    except Exception as e:
+        chunks = 0
         sampled = False
+
     summary = generate_summary(contents, file.filename)
+
+    # Clean summary of NaN values
+    import math
+    def clean_value(v):
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return None
+        return v
+
+    def clean_dict(d):
+        if isinstance(d, dict):
+            return {k: clean_dict(v) for k, v in d.items()}
+        elif isinstance(d, list):
+            return [clean_dict(i) for i in d]
+        else:
+            return clean_value(d)
+
+    summary = clean_dict(summary)
+
     return {
         "message": "File uploaded and indexed successfully",
         "filename": file.filename,
@@ -78,7 +109,6 @@ async def upload_file(
         "sampled": sampled,
         "summary": summary
     }
-
 
 @router.post("/summarize")
 async def summarize_file(
@@ -796,3 +826,170 @@ async def disable_2fa_endpoint(
     current_user: str = Depends(get_current_user)
 ):
     return await disable_2fa(current_user, request.code, db)
+class DuckDBQueryRequest(BaseModel):
+    sql: str
+    file_id: str
+
+class NLQueryRequest(BaseModel):
+    question: str
+    file_id: str
+    profile: dict = {}
+
+@router.post("/datasets/upload")
+async def upload_dataset(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    import numpy as np
+    import math
+
+    if not file.filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Only CSV and Excel files allowed")
+
+    contents = await file.read()
+
+    try:
+        # Register in DuckDB and get profile
+        profile = register_dataset(contents, file.filename, "temp")
+
+        # Save to MongoDB
+        file_meta = {
+            "filename": file.filename,
+            "rows": profile["rows"],
+            "columns": profile["column_names"],
+            "uploaded_by": current_user,
+            "profile": profile,
+        }
+        result = await db.files.insert_one(file_meta)
+        file_id = str(result.inserted_id)
+
+        # Re-register with correct file_id
+        profile = register_dataset(contents, file.filename, file_id)
+
+        # Update MongoDB with correct file_id
+        await db.files.update_one(
+            {"_id": result.inserted_id},
+            {"$set": {"file_id": file_id, "profile": profile}}
+        )
+
+        return {
+            "message": "Dataset uploaded and ready for analysis!",
+            "file_id": file_id,
+            "filename": file.filename,
+            "rows": profile["rows"],
+            "columns": profile["columns"],
+            "numeric_columns": profile["numeric_columns"],
+            "categorical_columns": profile["categorical_columns"],
+            "profile": profile,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/datasets/{file_id}/profile")
+async def get_dataset_profile(
+    file_id: str,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        analytics = quick_analytics(file_id)
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/datasets/query-sql")
+async def query_dataset_sql(
+    request: DuckDBQueryRequest,
+    current_user: str = Depends(get_current_user)
+):
+    try:
+        result = execute_query(request.file_id, request.sql)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/datasets/query-nl")
+async def query_dataset_nl(
+    request: NLQueryRequest,
+    current_user: str = Depends(get_current_user)
+):
+    from langchain_ollama import OllamaLLM
+    llm = OllamaLLM(model="llama3.2")
+
+    profile = request.profile
+    schema = get_schema_context(request.file_id, profile)
+    table_name = f"dataset_{request.file_id[:16].replace('-', '_')}"
+
+    # Step 1: Generate SQL
+    sql_prompt = f"""You are a SQL expert. Generate a DuckDB SQL SELECT query for this question.
+
+Table: {table_name}
+Schema:
+{schema}
+
+Question: {request.question}
+
+Rules:
+- Only use SELECT or WITH
+- Use column names exactly as shown
+- LIMIT results to 20 rows maximum
+- Return ONLY the SQL query, nothing else
+
+SQL:"""
+
+    try:
+        sql = llm.invoke(sql_prompt).strip()
+        # Clean SQL
+        if "```" in sql:
+            sql = sql.split("```")[1].replace("sql", "").strip()
+
+        # Step 2: Execute SQL
+        db_result = execute_query(request.file_id, sql)
+
+        if "error" in db_result:
+            # Fallback to schema-only answer
+            answer_prompt = f"""Based on this dataset information, answer the question.
+
+Schema: {schema}
+
+Question: {request.question}
+
+Note: Direct data query failed. Use the statistics above to answer.
+Answer:"""
+            answer = llm.invoke(answer_prompt)
+            return {
+                "question": request.question,
+                "answer": answer,
+                "sql": sql,
+                "sql_error": db_result["error"],
+                "data": [],
+            }
+
+        # Step 3: Generate explanation
+        data_preview = str(db_result["data"][:5])[:1000]
+        explain_prompt = f"""You are a business intelligence analyst. Explain this data result clearly.
+
+Question: {request.question}
+SQL Result ({db_result['rows']} rows): {data_preview}
+
+Provide a clear, concise business insight in 2-3 sentences.
+Answer:"""
+
+        answer = llm.invoke(explain_prompt)
+
+        return {
+            "question": request.question,
+            "answer": answer,
+            "sql": sql,
+            "data": db_result["data"][:20],
+            "total_rows": db_result["rows"],
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

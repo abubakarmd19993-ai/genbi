@@ -122,8 +122,6 @@ orjson==3.11.9
 ormsgpack==1.12.2
 overrides==7.7.0
 packaging==26.2
-paddleocr==2.9.1
-paddlepaddle==3.3.1
 pandas==3.0.3
 passlib==1.7.4
 pillow==12.3.0

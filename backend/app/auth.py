@@ -12,7 +12,7 @@ load_dotenv()
 
 router = APIRouter(prefix="/auth")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "genbi-secret-key-change-in-production")
 

@@ -1,3 +1,4 @@
+# GenBI v2.0 - Force rebuild
 fastapi>=0.100.0
 uvicorn>=0.20.0
 motor>=3.0.0

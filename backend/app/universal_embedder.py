@@ -3,13 +3,22 @@ import json
 import fitz
 import pandas as pd
 from docx import Document as DocxDocument
-from langchain_ollama import OllamaEmbeddings
+from sentence_transformers import SentenceTransformer
+from langchain.embeddings.base import Embeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from datetime import datetime
 
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
+class LocalEmbeddings(Embeddings):
+    def __init__(self):
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+    def embed_documents(self, texts):
+        return self.model.encode(texts).tolist()
+    def embed_query(self, text):
+        return self.model.encode([text])[0].tolist()
+
+embeddings = LocalEmbeddings()
 CHROMA_DIR = "./chroma_db"
 
 SUPPORTED_TYPES = {
@@ -82,22 +91,18 @@ def embed_document(
     chunk_overlap: int = 50,
 ) -> dict:
     start_time = datetime.now()
-
-    # Extract text
     doc_data = extract_text(contents, filename)
     text = doc_data["text"]
 
     if not text.strip():
         raise ValueError("No text found in document.")
 
-    # Chunk text
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
     )
     chunks = splitter.split_text(text)
 
-    # Create documents
     docs = [
         Document(
             page_content=chunk,
@@ -113,7 +118,6 @@ def embed_document(
         for i, chunk in enumerate(chunks)
     ]
 
-    # Store in ChromaDB
     collection_name = f"embed_{username[:10]}_{file_id[:15].replace('-', '_')}"
     vectorstore = Chroma(
         collection_name=collection_name,

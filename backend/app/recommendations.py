@@ -1,8 +1,8 @@
 import pandas as pd
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2:1b")
+
 
 
 def generate_recommendations(contents: bytes, filename: str) -> dict:
@@ -60,7 +60,7 @@ Be specific with numbers and percentages. Focus on business impact.
 Write in clear business language. Each point should be 1-2 sentences max.
 """
 
-    response = llm.invoke(prompt)
+    response = groq_chat(prompt)
 
     return {
         "recommendations": response,

@@ -2,14 +2,14 @@ import io
 import fitz
 from docx import Document as DocxDocument
 from pptx import Presentation
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings
 from langchain_core.documents import Document
 from datetime import datetime
 
-llm = OllamaLLM(model="llama3.2")
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
 SUPPORTED_TYPES = {
@@ -117,7 +117,7 @@ Content:
 
 Be concise and professional."""
 
-    return llm.invoke(prompt)
+    return groq_chat(prompt)
 
 def ingest_document(contents: bytes, filename: str, file_id: str) -> dict:
     """Extract text and index into ChromaDB."""
@@ -179,7 +179,7 @@ QUESTION: {question}
 If the answer is not in the document, say "This information is not found in the document."
 Provide a clear, accurate, and helpful answer."""
 
-    answer = llm.invoke(prompt)
+    answer = groq_chat(prompt)
 
     return {
         "question": question,

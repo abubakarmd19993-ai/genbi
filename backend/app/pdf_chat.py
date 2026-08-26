@@ -1,14 +1,14 @@
 import io
 import fitz  # pymupdf
 import numpy as np
-from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from backend.app.groq_client import chat as groq_chat
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 import chromadb
 from datetime import datetime
 
-llm = OllamaLLM(model="llama3.2")
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
 def extract_pdf_text(contents: bytes) -> str:
@@ -83,7 +83,7 @@ Provide a clear, accurate, and detailed answer based only on the PDF content abo
 If the answer is not in the PDF, say "This information is not found in the PDF."
 """
 
-    answer = llm.invoke(prompt)
+    answer = groq_chat(prompt)
 
     return {
         "question": question,
@@ -111,7 +111,7 @@ PDF Content:
 
 Be concise and professional."""
 
-    summary = llm.invoke(prompt)
+    summary = groq_chat(prompt)
 
     # Count pages
     pdf_doc = fitz.open(stream=contents, filetype="pdf")

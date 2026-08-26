@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2")
+
 
 INDUSTRY_KEYWORDS = {
     "retail": ["product", "sales", "inventory", "price", "category", "store", "revenue", "discount", "customer", "purchase"],
@@ -80,7 +80,7 @@ Compare key metrics against {industry} industry standards.
 
 Be specific with numbers. Use {industry} terminology."""
 
-    intelligence = llm.invoke(prompt)
+    intelligence = groq_chat(prompt)
 
     return {
         "filename": filename,

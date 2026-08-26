@@ -1,7 +1,8 @@
 import io
 import re
 from youtube_transcript_api import YouTubeTranscriptApi
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -10,7 +11,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from datetime import datetime
 
-llm = OllamaLLM(model="llama3.2")
 
 def extract_video_id(url: str) -> str:
     """Extract YouTube video ID from URL."""
@@ -79,7 +79,7 @@ List 5 main takeaways from this video.
 
 Be thorough, educational, and well-organized."""
 
-    notes = llm.invoke(notes_prompt)
+    notes = groq_chat(notes_prompt)
     return {"notes": notes, "transcript_length": len(transcript)}
 
 def create_pdf(notes_content: str, video_url: str, username: str) -> bytes:

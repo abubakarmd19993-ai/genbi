@@ -3,7 +3,8 @@ import json
 import re
 import fitz
 from docx import Document as DocxDocument
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -12,7 +13,6 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
-llm = OllamaLLM(model="llama3.2")
 
 def extract_transcript(contents: bytes, filename: str) -> str:
     ext = "." + filename.lower().rsplit(".", 1)[-1]
@@ -58,7 +58,7 @@ Return this exact JSON structure:
 
 IMPORTANT: Return ONLY the JSON above filled with real data from the transcript. No explanation."""
 
-    result = llm.invoke(prompt)
+    result = groq_chat(prompt)
     try:
         result = result.strip()
         if result.startswith("```"):

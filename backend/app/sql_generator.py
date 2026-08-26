@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2")
+
 
 def generate_sql(contents: bytes, filename: str, question: str) -> dict:
     """Generate SQL query from natural language question."""
@@ -49,7 +49,7 @@ Provide:
 
 Format your response clearly with these exact headers."""
 
-    ai_response = llm.invoke(prompt)
+    ai_response = groq_chat(prompt)
 
     # Try to execute query using pandas
     executed_result = None

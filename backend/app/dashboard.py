@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2:1b")
+
 
 
 def generate_dashboard(contents: bytes, filename: str) -> dict:
@@ -108,6 +108,6 @@ Key metrics: {summary}
 Category breakdown: {dict(df[text_cols[0]].value_counts().head(3)) if text_cols else 'N/A'}
 Be specific with numbers. Focus on the most important finding."""
 
-    result["ai_insight"] = llm.invoke(prompt)
+    result["ai_insight"] = groq_chat(prompt)
 
     return result

@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2")
+
 
 def business_consultant_analysis(contents: bytes, filename: str) -> dict:
     """AI Business Consultant — full business analysis."""
@@ -93,7 +93,7 @@ List 5 specific KPIs with target values.
 
 Be specific with numbers from the data. Write like a McKinsey consultant."""
 
-    consultation = llm.invoke(prompt)
+    consultation = groq_chat(prompt)
 
     return {
         "filename": filename,

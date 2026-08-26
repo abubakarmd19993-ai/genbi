@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2:1b")
+
 
 
 def analyze_data_quality(contents: bytes, filename: str) -> dict:
@@ -95,7 +95,7 @@ Provide:
 
 Keep it brief and actionable. Use business language."""
 
-    ai_summary = llm.invoke(prompt)
+    ai_summary = groq_chat(prompt)
 
     return {
         "filename": filename,

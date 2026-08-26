@@ -1,8 +1,8 @@
 import pandas as pd
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
 
-llm = OllamaLLM(model="llama3.2:1b")
+
 
 
 def generate_insights(contents: bytes, filename: str) -> dict:
@@ -62,7 +62,7 @@ Write in plain business English. Be specific with numbers. Focus on business imp
 Keep each point concise (1-2 sentences max).
 """
 
-    response = llm.invoke(prompt)
+    response = groq_chat(prompt)
 
     return {
         "executive_summary": response,

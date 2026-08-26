@@ -3,12 +3,12 @@ import json
 import fitz
 import pytesseract
 from PIL import Image
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from datetime import datetime
 import re
 
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-llm = OllamaLLM(model="llama3.2")
 
 def extract_text_from_invoice(contents: bytes, filename: str) -> str:
     """Extract text from PDF or image invoice."""
@@ -74,7 +74,7 @@ Return a JSON object with EXACTLY these fields (use null if not found):
 
 Return ONLY the JSON. No explanation. No markdown."""
 
-    result = llm.invoke(prompt)
+    result = groq_chat(prompt)
 
     # Clean JSON
     try:

@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 import io
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from scipy import stats
 
-llm = OllamaLLM(model="llama3.2")
 
 def analyze_root_cause(contents: bytes, filename: str) -> dict:
     """Analyze root causes of trends and anomalies in business data."""
@@ -141,7 +141,7 @@ Provide a ROOT CAUSE ANALYSIS with:
 Be analytical, specific, and use the actual data findings above.
 Format clearly with headers."""
 
-    ai_analysis = llm.invoke(prompt)
+    ai_analysis = groq_chat(prompt)
 
     return {
         "filename": filename,

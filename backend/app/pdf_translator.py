@@ -77,7 +77,7 @@ English text to translate:
 
 {language_name} translation:"""
 
-    result = llm.invoke(prompt)
+    result = groq_chat(prompt)
 
     # If translation fails return original
     if not result or len(result.strip()) < 10:

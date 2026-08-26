@@ -7,7 +7,6 @@ import io
 
 # Initialize embedding model and LLM
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
-llm = OllamaLLM(model="llama3.2")
 
 # ChromaDB storage path
 CHROMA_PATH = "chroma_db"
@@ -160,7 +159,7 @@ Question: {question}
 Provide a clear, accurate answer based only on the data above. If you cannot answer from the data, say so.
 Answer:"""
 
-    answer = llm.invoke(prompt)
+    answer = groq_chat(prompt)
     return {
         "answer": answer,
         "context": context[:500],

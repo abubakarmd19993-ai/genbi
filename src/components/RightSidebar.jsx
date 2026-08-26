@@ -22,7 +22,7 @@ export default function RightSidebar({ setActiveTool }) {
   const integrations = [
     { name: "MongoDB", icon: "🍃" },
     { name: "ChromaDB", icon: "🔮" },
-    { name: "Ollama", icon: "🦙" },
+    { name: "Groq AI", icon: "🦙" },
     { name: "Prophet", icon: "📈" },
   ];
 

@@ -13,10 +13,10 @@ from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.charts.lineplots import LinePlot
 from reportlab.graphics import renderPDF
 from reportlab.graphics.widgets.markers import makeMarker
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from datetime import datetime
 
-llm = OllamaLLM(model="llama3.2")
 
 COLORS_HEX = [
     colors.HexColor("#f78166"),
@@ -200,7 +200,7 @@ Write:
 
 Use professional business language. Be specific with numbers."""
 
-    ai_content = llm.invoke(prompt)
+    ai_content = groq_chat(prompt)
 
     # Build PDF
     buffer = io.BytesIO()

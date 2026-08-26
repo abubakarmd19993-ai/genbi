@@ -2,10 +2,10 @@ import io
 import json
 import re
 import fitz
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import chat as groq_chat
+
 from datetime import datetime
  
-llm = OllamaLLM(model="llama3.2")
  
 def extract_text_from_resume(contents: bytes, filename: str) -> str:
     """Extract text from PDF, DOCX or text resume."""
@@ -81,7 +81,7 @@ Return a JSON object with EXACTLY these fields (use null if not found):
  
 Return ONLY the JSON. No explanation. No markdown."""
  
-    result = llm.invoke(prompt)
+    result = groq_chat(prompt)
     try:
         result = result.strip()
         if result.startswith("```"):

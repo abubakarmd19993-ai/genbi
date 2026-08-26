@@ -1,3 +1,4 @@
+from backend.app.payments import create_order, verify_payment, get_user_plan
 from backend.app.duckdb_engine import register_dataset, execute_query, get_schema_context, quick_analytics, generate_profile
 from backend.app.two_factor import setup_2fa, verify_and_enable_2fa, disable_2fa, get_2fa_status
 from backend.app.api_keys import create_api_key, list_api_keys, delete_api_key
@@ -993,3 +994,34 @@ Answer:"""
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+class PaymentOrderRequest(BaseModel):
+    plan: str
+
+class PaymentVerifyRequest(BaseModel):
+    order_id: str
+    payment_id: str
+    signature: str
+
+@router.post("/payments/create-order")
+async def payment_create_order(
+    request: PaymentOrderRequest,
+    current_user: str = Depends(get_current_user)
+):
+    return await create_order(request.plan, current_user, db)
+
+@router.post("/payments/verify")
+async def payment_verify(
+    request: PaymentVerifyRequest,
+    current_user: str = Depends(get_current_user)
+):
+    return await verify_payment(
+        request.order_id,
+        request.payment_id,
+        request.signature,
+        current_user,
+        db
+    )
+
+@router.get("/payments/my-plan")
+async def my_plan(current_user: str = Depends(get_current_user)):
+    return await get_user_plan(current_user, db)

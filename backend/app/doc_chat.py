@@ -3,14 +3,22 @@ import fitz
 from docx import Document as DocxDocument
 from pptx import Presentation
 from backend.app.groq_client import chat as groq_chat
-
+from sentence_transformers import SentenceTransformer
+from langchain.embeddings.base import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_ollama import OllamaEmbeddings
 from langchain_core.documents import Document
 from datetime import datetime
 
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
+class LocalEmbeddings(Embeddings):
+    def __init__(self):
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+    def embed_documents(self, texts):
+        return self.model.encode(texts).tolist()
+    def embed_query(self, text):
+        return self.model.encode([text])[0].tolist()
+
+embeddings = LocalEmbeddings()
 
 SUPPORTED_TYPES = {
     ".pdf": "PDF Document",
@@ -22,7 +30,6 @@ SUPPORTED_TYPES = {
 }
 
 def extract_text(contents: bytes, filename: str) -> dict:
-    """Extract text from any supported document type."""
     ext = "." + filename.lower().rsplit(".", 1)[-1]
 
     if ext == ".pdf":
@@ -100,10 +107,8 @@ def extract_text(contents: bytes, filename: str) -> dict:
         raise ValueError(f"Unsupported file type: {ext}")
 
 def generate_summary(doc_data: dict, filename: str) -> str:
-    """Generate AI summary of the document."""
     sample = doc_data["full_text"][:3000]
     doc_type = doc_data["type"]
-
     prompt = f"""You are an expert document analyst. Analyze this {doc_type} and provide:
 
 1. DOCUMENT TYPE & PURPOSE (1-2 sentences)
@@ -116,18 +121,12 @@ Content:
 {sample}
 
 Be concise and professional."""
-
     return groq_chat(prompt)
 
 def ingest_document(contents: bytes, filename: str, file_id: str) -> dict:
-    """Extract text and index into ChromaDB."""
     doc_data = extract_text(contents, filename)
-
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500, chunk_overlap=50
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_text(doc_data["full_text"])
-
     docs = [
         Document(
             page_content=chunk,
@@ -135,7 +134,6 @@ def ingest_document(contents: bytes, filename: str, file_id: str) -> dict:
         )
         for i, chunk in enumerate(chunks)
     ]
-
     collection_name = f"doc_{file_id[:20].replace('-', '_')}"
     vectorstore = Chroma(
         collection_name=collection_name,
@@ -143,9 +141,7 @@ def ingest_document(contents: bytes, filename: str, file_id: str) -> dict:
         persist_directory="./chroma_db"
     )
     vectorstore.add_documents(docs)
-
     summary = generate_summary(doc_data, filename)
-
     return {
         "filename": filename,
         "doc_type": doc_data["type"],
@@ -156,19 +152,15 @@ def ingest_document(contents: bytes, filename: str, file_id: str) -> dict:
     }
 
 def query_document(question: str, file_id: str) -> dict:
-    """Query document using RAG."""
     collection_name = f"doc_{file_id[:20].replace('-', '_')}"
-
     vectorstore = Chroma(
         collection_name=collection_name,
         embedding_function=embeddings,
         persist_directory="./chroma_db"
     )
-
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     relevant_docs = retriever.invoke(question)
     context = "\n\n".join([doc.page_content for doc in relevant_docs])
-
     prompt = f"""You are an expert document assistant. Answer the question based ONLY on the document content below.
 
 DOCUMENT CONTENT:
@@ -178,9 +170,7 @@ QUESTION: {question}
 
 If the answer is not in the document, say "This information is not found in the document."
 Provide a clear, accurate, and helpful answer."""
-
     answer = groq_chat(prompt)
-
     return {
         "question": question,
         "answer": answer,

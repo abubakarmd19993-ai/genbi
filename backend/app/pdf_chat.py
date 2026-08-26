@@ -1,18 +1,26 @@
 import io
-import fitz  # pymupdf
+import fitz
 import numpy as np
 from backend.app.groq_client import chat as groq_chat
-
+from sentence_transformers import SentenceTransformer
+from langchain.embeddings.base import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 import chromadb
 from datetime import datetime
 
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
+class LocalEmbeddings(Embeddings):
+    def __init__(self):
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+    def embed_documents(self, texts):
+        return self.model.encode(texts).tolist()
+    def embed_query(self, text):
+        return self.model.encode([text])[0].tolist()
+
+embeddings = LocalEmbeddings()
 
 def extract_pdf_text(contents: bytes) -> str:
-    """Extract text from PDF using PyMuPDF."""
     try:
         pdf_doc = fitz.open(stream=contents, filetype="pdf")
         full_text = ""
@@ -29,15 +37,9 @@ def extract_pdf_text(contents: bytes) -> str:
         raise ValueError(f"Could not extract text from PDF: {str(e)}")
 
 def ingest_pdf(contents: bytes, filename: str, file_id: str) -> int:
-    """Chunk and embed PDF content into ChromaDB."""
     text = extract_pdf_text(contents)
-
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_text(text)
-
     docs = [
         Document(
             page_content=chunk,
@@ -45,46 +47,33 @@ def ingest_pdf(contents: bytes, filename: str, file_id: str) -> int:
         )
         for i, chunk in enumerate(chunks)
     ]
-
     collection_name = f"pdf_{file_id[:20].replace('-', '_')}"
-
     vectorstore = Chroma(
         collection_name=collection_name,
         embedding_function=embeddings,
         persist_directory="./chroma_db"
     )
     vectorstore.add_documents(docs)
-
     return len(docs)
 
 def query_pdf(question: str, file_id: str) -> dict:
-    """Query PDF using RAG."""
     collection_name = f"pdf_{file_id[:20].replace('-', '_')}"
-
     vectorstore = Chroma(
         collection_name=collection_name,
         embedding_function=embeddings,
         persist_directory="./chroma_db"
     )
-
-    # Retrieve relevant chunks
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     relevant_docs = retriever.invoke(question)
     context = "\n\n".join([doc.page_content for doc in relevant_docs])
-
     prompt = f"""You are an expert document analyst. Answer the question based on the PDF content below.
-
 PDF CONTENT:
 {context}
-
 QUESTION: {question}
-
 Provide a clear, accurate, and detailed answer based only on the PDF content above.
 If the answer is not in the PDF, say "This information is not found in the PDF."
 """
-
     answer = groq_chat(prompt)
-
     return {
         "question": question,
         "answer": answer,
@@ -93,31 +82,20 @@ If the answer is not in the PDF, say "This information is not found in the PDF."
     }
 
 def get_pdf_summary(contents: bytes, filename: str) -> dict:
-    """Generate a quick summary of the PDF."""
     text = extract_pdf_text(contents)
-
-    # Truncate for LLM
     sample = text[:4000] if len(text) > 4000 else text
-
     prompt = f"""Analyze this PDF document and provide:
-
 1. DOCUMENT TYPE (report, research paper, invoice, manual, etc.)
 2. MAIN TOPIC (2-3 sentences)
 3. KEY POINTS (5 bullet points)
 4. DOCUMENT STATS
-
 PDF Content:
 {sample}
-
 Be concise and professional."""
-
     summary = groq_chat(prompt)
-
-    # Count pages
     pdf_doc = fitz.open(stream=contents, filetype="pdf")
     page_count = len(pdf_doc)
     pdf_doc.close()
-
     return {
         "filename": filename,
         "pages": page_count,

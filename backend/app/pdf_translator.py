@@ -1,6 +1,6 @@
 import io
 import fitz
-from langchain_ollama import OllamaLLM
+from backend.app.groq_client import translate_text as groq_translate
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -9,7 +9,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from datetime import datetime
 
-llm = OllamaLLM(model="llama3.2")
 
 SUPPORTED_LANGUAGES = {
     "hindi": "Hindi",
@@ -24,8 +23,22 @@ SUPPORTED_LANGUAGES = {
     "korean": "Korean",
     "tamil": "Tamil",
     "marathi": "Marathi",
+    "kannada": "Kannada",
+    "malayalam": "Malayalam",
+    "odia": "Odia",
+    "punjabi": "Punjabi",
+    "bengali": "Bengali",
+    "gujarati": "Gujarati",
+    "assamese": "Assamese",
+    "sanskrit": "Sanskrit",
+    "konkani": "Konkani",
+    "tulu": "Tulu",
+    "portuguese": "Portuguese",
+    "italian": "Italian",
+    "russian": "Russian",
+    "turkish": "Turkish",
+    "dutch": "Dutch",
 }
-
 def extract_pdf_text(contents: bytes) -> tuple:
     try:
         pdf_doc = fitz.open(stream=contents, filetype="pdf")
@@ -46,6 +59,11 @@ def extract_pdf_text(contents: bytes) -> tuple:
         raise ValueError(f"Could not extract PDF text: {str(e)}")
 
 def translate_text(text: str, target_language: str) -> str:
+    language_name = SUPPORTED_LANGUAGES.get(target_language.lower(), target_language)
+    try:
+        return groq_translate(text, language_name)
+    except Exception as e:
+        return f"Translation error: {str(e)}"
     language_name = SUPPORTED_LANGUAGES.get(target_language.lower(), target_language)
     prompt = f"""You are a professional translator. Translate this English text to {language_name}.
 

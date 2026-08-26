@@ -23,7 +23,7 @@ def translate_text(text: str, target_language: str) -> str:
     """Translate text to target language using Groq."""
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama3-70b-8192",
             messages=[
                 {"role": "system", "content": f"You are a professional translator. Translate the following text to {target_language}. Return only the translated text, nothing else."},
                 {"role": "user", "content": text}

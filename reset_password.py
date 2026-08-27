@@ -1,12 +1,14 @@
 import asyncio
-import bcrypt
 from motor.motor_asyncio import AsyncIOMotorClient
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 async def reset():
     client = AsyncIOMotorClient("mongodb://127.0.0.1:27017")
     db = client.genbi
     new_password = "genbi123"
-    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    hashed = pwd_context.hash(new_password[:72])
     result = await db.users.update_one(
         {"username": "mohammed"},
         {"$set": {"password": hashed}}

@@ -9,7 +9,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from datetime import datetime
 
-
 SUPPORTED_LANGUAGES = {
     "hindi": "Hindi",
     "arabic": "Arabic",
@@ -39,6 +38,7 @@ SUPPORTED_LANGUAGES = {
     "turkish": "Turkish",
     "dutch": "Dutch",
 }
+
 def extract_pdf_text(contents: bytes) -> tuple:
     try:
         pdf_doc = fitz.open(stream=contents, filetype="pdf")
@@ -64,26 +64,6 @@ def translate_text(text: str, target_language: str) -> str:
         return groq_translate(text, language_name)
     except Exception as e:
         return f"Translation error: {str(e)}"
-    language_name = SUPPORTED_LANGUAGES.get(target_language.lower(), target_language)
-    prompt = f"""You are a professional translator. Translate this English text to {language_name}.
-
-Rules:
-- Return ONLY the translated text
-- Keep numbers and dates as they are
-- Do not add any explanation or notes
-
-English text to translate:
-{text[:2500]}
-
-{language_name} translation:"""
-
-    result = groq_chat(prompt)
-
-    # If translation fails return original
-    if not result or len(result.strip()) < 10:
-        return text
-
-    return result
 
 def create_translated_pdf(
     pages_text: list,
@@ -115,7 +95,6 @@ def create_translated_pdf(
         fontSize=10, textColor=colors.HexColor("#374151"),
         spaceAfter=5, leading=16)
 
-    # Header
     story.append(Paragraph("GenBI PDF Translator", title_style))
     story.append(Paragraph(f"Translated to: {language_name}", subtitle_style))
     story.append(Paragraph(
@@ -126,19 +105,15 @@ def create_translated_pdf(
         color=colors.HexColor("#3B82F6"), spaceAfter=16))
     story.append(Spacer(1, 8))
 
-    # Translate each page
     for page_data in pages_text:
         story.append(Paragraph(f"--- Page {page_data['page']} ---", heading_style))
-
         translated = translate_text(page_data["text"], target_language)
-
         for line in translated.split("\n"):
             line = line.strip()
             if not line:
                 story.append(Spacer(1, 4))
                 continue
             try:
-                # Try to add paragraph - handle encoding
                 clean = line.encode("latin-1", "replace").decode("latin-1")
                 story.append(Paragraph(clean, body_style))
             except Exception:
@@ -146,11 +121,9 @@ def create_translated_pdf(
                     story.append(Paragraph(line.encode("ascii", "ignore").decode("ascii"), body_style))
                 except:
                     pass
-
         story.append(HRFlowable(width="100%", thickness=0.5,
             color=colors.HexColor("#e5e7eb"), spaceBefore=8, spaceAfter=8))
 
-    # Footer
     story.append(Spacer(1, 16))
     story.append(HRFlowable(width="100%", thickness=1,
         color=colors.HexColor("#3B82F6")))

@@ -3,10 +3,10 @@ from groq import Groq
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-def chat(prompt: str, system: str = "You are a helpful AI assistant.", model: str = "llama-3.1-8b-instant") -> str:
+def chat(prompt: str, system: str = "You are a helpful AI assistant.") -> str:
     try:
         response = client.chat.completions.create(
-            model=model,
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt}
@@ -21,7 +21,7 @@ def chat(prompt: str, system: str = "You are a helpful AI assistant.", model: st
 def translate_text(text: str, target_language: str) -> str:
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": f"You are a professional translator. Translate the following text to {target_language}. Return only the translated text, nothing else."},
                 {"role": "user", "content": text}
